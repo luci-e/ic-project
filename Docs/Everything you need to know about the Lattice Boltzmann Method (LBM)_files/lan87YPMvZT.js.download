@@ -1,0 +1,3 @@
+if (self.CavalryLogger) { CavalryLogger.start_js(["e9hxc"]); }
+
+__d("TBLPagesPageAction",["PagesLoggingEventsTypedLogger"],(function(a,b,c,d,e,f){__p&&__p();a.logClick=function(a,c,d,e,f,g){g===void 0&&(g=null);var h={},i=null;h.action_id=d===null?"":String(d);h.action_type=String(e);h.is_primary=f?"1":"0";new(b("PagesLoggingEventsTypedLogger"))().setEventType("click").setEventTarget("page_action").setEventLocation(a).setEventData(h).setPageID(c).setContent(i).setReferrer(g).log()};a.registerLogOnClick=function(a,b,c,d,e,f,g){g===void 0&&(g=null),a.addEventListener("click",function(){this.logClick(b,c,d,e,f,g)}.bind(this))};function a(){"use strict"}e.exports=a}),null);
