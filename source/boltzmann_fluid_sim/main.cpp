@@ -8,6 +8,8 @@
 #include <GLFW/glfw3.h>
 
 #include <cuda_gl_interop.h>
+#include <chrono>
+#include <thread>
 
 #include "shaderHelper.h"
 #include "bSimulator.h"
@@ -78,9 +80,10 @@ int main()
 
 	Shader shd("vertex.glsl", "fragment.glsl");
 	shd.use();
-	sim.InitParticles();
+	sim.initNodes(1.0);
 
 	while (!glfwWindowShouldClose(window)) {
+		sim.CPUUpdate();
 		// wipe the drawing surface clear
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -90,7 +93,9 @@ int main()
 		// put the stuff we've been drawing onto the display
 		glfwSwapBuffers(window);
 		// update other events like input handling 
-		glfwPollEvents();
+		glfwPollEvents();		
+		std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
 	}
 
 	//------------------------------------------------//
