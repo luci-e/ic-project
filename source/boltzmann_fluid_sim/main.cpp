@@ -16,7 +16,7 @@
 
 GLFWwindow* window;
 
-bSimulator sim = bSimulator();
+bSimulator* sim;
 
 // Window properties
 int wWidth = 0, wHeight = 0;
@@ -61,6 +61,8 @@ int initGL() {
 }
 
 void cleanup() {
+	sim->cleanup();
+	cudaFree(sim);
 }
 
 
@@ -78,28 +80,39 @@ int main()
 
 	//------------------------------------------------//
 
+	sim = new bSimulator();
+
 	Shader shd("vertex.glsl", "fragment.glsl");
 	shd.use();
-	sim.initNodes(1.0);
+	sim->initSim(256, 256);
+	sim->initNodes();
+
+	// wipe the drawing surface clear
+	glClearColor(0, 0, 0, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glBindVertexArray(sim->vao);
+	glDrawArrays(GL_POINTS, 0, sim->totalPoints);
+	// put the stuff we've been drawing onto the display
+	glfwSwapBuffers(window);
 
 	while (!glfwWindowShouldClose(window)) {
-		sim.CPUUpdate();
+		sim->GPUUpdate();
 		// wipe the drawing surface clear
-		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+		glClearColor(0,0,0, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		glBindVertexArray(sim.vao);
-		glDrawArrays(GL_POINTS, 0, sim.totalPoints);
+		glBindVertexArray(sim->vao);
+		glDrawArrays(GL_POINTS, 0, sim->totalPoints);
 		// put the stuff we've been drawing onto the display
 		glfwSwapBuffers(window);
 		// update other events like input handling 
 		glfwPollEvents();		
-		std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
 	}
 
 	//------------------------------------------------//
 
+	cleanup();
 
 	// cudaDeviceReset must be called before exiting in order for profiling and
 	// tracing tools such as Nsight and Visual Profiler to show complete traces.
@@ -108,8 +121,6 @@ int main()
 		fprintf(stderr, "cudaDeviceReset failed!");
 		return 1;
 	}
-
-	cleanup();
 
 	// close GL context and any other GLFW resources
 	glfwTerminate();

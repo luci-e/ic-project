@@ -3,86 +3,54 @@
 #include <functional> 
 #include <algorithm>
 #include "utilities.h"
-
-void bSimulator::InitParticles()
-{
-	glGenBuffers(1, &nodesBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	glBufferData(GL_ARRAY_BUFFER, totalPoints * sizeof(particle), NULL, GL_DYNAMIC_DRAW);
-
-	particle* p = (particle*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
-
-	if (p == NULL) {
-		printf("Error while mapping the buffer into client memory!\n");
-	}
-	else {
-		printf("Successfully mapped buffer into client memory!\n");
-	}
-
-	std::default_random_engine generator;
-	std::uniform_real_distribution<float> pos_distribution(-1.0, 1.0);
-	std::uniform_real_distribution<float> col_distribution(0.0, 1.0);
-
-	auto pos_dice = std::bind(pos_distribution, generator);
-	auto col_dice = std::bind(col_distribution, generator);
-
-	int i, j;
-
-	for (i = 0; i < this->dimY; i++)
-	{
-		for (j = 0; j < this->dimX; j++)
-		{
-			particle pa = { pos_dice(), pos_dice(),  col_dice(),  col_dice() };
-			*(p + (i * this->dimX + j)) = pa;
-		}
-	}
-
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-
-	GLint size = 0;
-	glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
-	printf("Allocated buffer size %d\n", size);
-
-	glGenVertexArrays(1, &this->vao);
-	glBindVertexArray(this->vao);
-	glBindBuffer(GL_ARRAY_BUFFER, this->nodesBuffer);
-
-	// Set the positions and stride 
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(particle), NULL);
-	glEnableVertexAttribArray(0);
-	// Set the colours and stride
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(particle), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
-
-}
+#include "bKernels.h"
 
 void bSimulator::CPUUpdate()
 {
+	CPUstream();
+	CPUComputeVelocity();
 	CPUcomputeEquilibrium();
 	CPUcomputeNew();
-	CPUstream();
 	updateDisplayNodes();
+}
+
+void bSimulator::CPUComputeVelocity()
+{
+
+	for (auto i = 0; i < totalPoints; i++) {
+		node& n = *(nodes + i);
+
+		if (n.ntype == nodeType::BASE) {
+			float macroVel[2];
+
+			float density = sum(n.newDensities, 9);
+
+			matMul(n.newDensities, speeds, macroVel, 1, 9, 2);
+			scalarProd(1.f / density, macroVel, macroVel, 2);
+			scalarProd((float)c, macroVel, macroVel, 2);
+			n.vel = { macroVel[0], macroVel[1] };
+		}
+
+	}
+
 }
 
 void bSimulator::CPUcomputeEquilibrium()
 {
 	for (auto i = 0; i < totalPoints; i++) {
+
 		node& n = *(nodes + i);
-		float density = sum(n.densities, 9);
-		float macroVel[2];
-		matMul(n.densities, speeds, macroVel, 1, 9, 2);
+		if (n.ntype == nodeType::BASE) {
 
-		if (n.vel.x != 0.f && n.vel.y != 0.f) {
-			float addVel[2] = { n.vel.x, n.vel.y };
-			n.vel = { 0, 0 };
-			vecSum(macroVel, addVel, macroVel, 2);
-		}
+			float density = sum(n.newDensities, 9);
+			float macroVel[2] = { n.vel.x, n.vel.y };
 
-		for (auto j = 0; j < 9; j++) {
-			float dotProd = dot(&speeds[2 * j], macroVel, 2);
-			n.eqDensities[j] = density * weights[j] * (1.f + 3.f * dotProd / c
-				+ 9.f * (pow(dotProd, 2) / csqr) / 2.f
-				- 3.f * pow(magnitude(macroVel, 2), 2) / (2.f * csqr));
+			for (auto j = 0; j < 9; j++) {
+				float dotProd = dot(&speeds[2 * j], macroVel, 2);
+				n.eqDensities[j] = density * weights[j] * (1.f + 3.f * dotProd / c
+					+ 9.f * (pow(dotProd, 2) / csqr) / 2.f
+					- 3.f * dot(macroVel, macroVel, 2) / (2.f * csqr));
+			}
 		}
 
 	}
@@ -93,13 +61,15 @@ void bSimulator::CPUcomputeNew()
 
 	for (auto i = 0; i < totalPoints; i++) {
 		node& n = *(nodes + i);
-		float newDensities[9];
+		if (n.ntype == nodeType::BASE) {
+			float newDensities[9];
 
-		vecSub(n.eqDensities, n.densities, newDensities, 9);
-		scalarProd((float)viscosity, newDensities, newDensities, 9);
-		vecSum(newDensities, n.densities, newDensities, 9);
-		memcpy(n.densities, newDensities, 9 * sizeof(float));
-
+			vecSub(n.eqDensities, n.newDensities, newDensities, 9);
+			scalarProd((float)viscosity, newDensities, newDensities, 9);
+			vecSum(newDensities, n.newDensities, newDensities, 9);
+			memcpy(n.densities, newDensities, 9 * sizeof(float));
+			memset(n.newDensities, 0.f, 9 * sizeof(float));
+		}
 	}
 
 }
@@ -109,44 +79,110 @@ void bSimulator::CPUstream()
 	for (auto i = 0; i < totalPoints; i++) {
 		node& n = *(nodes + i);
 
-		for (int j = 0; j < 9; j++) {
-			int dx = directions[j][0];
-			int dy = directions[j][1];
+		switch (n.ntype) {
+		case nodeType::BASE: {
+			for (int j = 0; j < 9; j++) {
+				int dx = directions[j][0];
+				int dy = directions[j][1];
 
-			if (dx == 0 && dy == 0)
-				continue;
+				if (dx == 0 && dy == 0) {
+					n.newDensities[j] = n.densities[j];
+					continue;
+				}
 
-			long long int newX = n.x + dx;
-			long long int newY = n.y + dy;
+				long long int newX = n.x + dx;
+				long long int newY = n.y + dy;
 
-			if (!inside(newX, newY)) {
-				int opposite = (j < 5) ? (j + 2) % 4 : (j + 2) % 4 + 4;
-				n.densities[opposite] += n.densities[j];
-				n.densities[j] = 0;
-				continue;
+				if (!inside(newX, newY)) {
+
+					switch (doAtEdge) {
+
+					case edgeBehaviour::LOOP: {
+						newX = (newX + dimX) % dimX;
+						newY = (newY + dimY) % dimY;
+
+						node& nn = *(nodes + newY * dimX + newX);
+
+						nn.newDensities[j] += n.densities[j];
+						n.densities[j] = 0;
+						break;
+					}
+
+					case edgeBehaviour::EXIT: {
+						n.densities[j] = 0;
+						break;
+					}
+
+					}
+
+					continue;
+				}
+
+				node& nn = *(nodes + newY * dimX + newX);
+
+				switch (nn.ntype) {
+				case nodeType::BASE: {
+					nn.newDensities[j] += n.densities[j];
+					n.densities[j] = 0;
+					break;
+				}
+
+				case nodeType::WALL: {
+					int opposite = (j < 5) ? ((j - 1) + 2) % 4 + 1 : ((j - 5) + 2) % 4 + 5;
+					n.newDensities[opposite] += n.densities[j];
+					n.densities[j] = 0;
+					break;
+				}
+				}
+
 			}
 
-			node& nn = *(nodes + newY * dimX + newX);
+			break;
+		}
 
-			nn.densities[j] += n.densities[j];
-			n.densities[j] = 0;
+		case nodeType::WALL: {
+
+			break;
+		}
 		}
 	}
 
 }
 
-int bSimulator::initNodes(float density)
+void bSimulator::GPUUpdate()
 {
+	GPUstream();
+	GPUComputeVelocity();
+	GPUcomputeEquilibrium();
+	GPUcomputeNew();
+	updateDisplayNodes();
+}
 
-	std::default_random_engine generator;
-	std::uniform_real_distribution<float> pos_distribution(-2.0, 2.0);
-	std::uniform_real_distribution<float> col_distribution(0.0, 1.0);
+void bSimulator::GPUComputeVelocity()
+{
+	computeVelocity(this);
+}
 
-	auto pos_dice = std::bind(pos_distribution, generator);
-	auto col_dice = std::bind(col_distribution, generator);
+void bSimulator::GPUcomputeEquilibrium()
+{
+	computeEquilibrium(this);
+}
+
+void bSimulator::GPUcomputeNew()
+{
+	computeNew(this);
+}
+
+void bSimulator::GPUstream()
+{
+	stream(this);
+}
 
 
-	nodes = (node*)malloc(sizeof(node) * totalPoints);
+int bSimulator::initNodes()
+{
+	cudaMallocManaged(&nodes, sizeof(node) * totalPoints);
+	cudaDeviceSynchronize();
 
 	if (nodes == NULL) {
 		return -1;
@@ -159,8 +195,25 @@ int bSimulator::initNodes(float density)
 			n.ntype = nodeType::BASE;
 			n.x = x;
 			n.y = y;
-			scalarProd<float>(density, &weights[0], &n.densities[0], 9);
-			n.vel = { mapNumber<float>(x, 0, dimX, 0.f, -300.f), 0.f};
+			memset(n.densities, 0.f, 9 * sizeof(float));
+			memset(n.newDensities, 0.f, 9 * sizeof(float));
+			memset(n.eqDensities, 0.f, 9 * sizeof(float));
+
+			// ********************************************* //
+
+			if (x > 20 && x < 100 && y > 20 && y < 100) {
+				n.densities[0] = .9f;
+				n.densities[1] = .1f;
+			}
+			else {
+				n.densities[0] = 1.f;
+			}
+
+			if (x > 100 && x < 200 && y > 100 && y < 200) {
+				n.ntype = nodeType::WALL;
+			}
+
+			// ********************************************* //
 		}
 	}
 
@@ -250,18 +303,35 @@ void bSimulator::initDisplayNode(const node& n, displayNode& dn)
 
 void bSimulator::updateDisplayNode(const node& n, displayNode& dn)
 {
-	dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 100.f, 0.f, 1.f);
 
-	float newSpeeds[2];
-	matMul(n.densities, speeds, newSpeeds, 1, 9, 2);
-	double mag = magnitude(newSpeeds, 2);
+	switch (n.ntype) {
+	case nodeType::BASE: {
+		dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 1.f, 0.f, 1.f);
 
-	dn.vel.x = mapNumber<float>(newSpeeds[0] / mag, -1.f, 1.f, 0.f, 1.f);
-	dn.vel.y = mapNumber<float>(newSpeeds[1] / mag, -1.f, 1.f, 0.f, 1.f);
+		float newSpeeds[2] = { n.vel.x, n.vel.y };
+		double mag = magnitude(newSpeeds, 2);
+
+		dn.vel.x = mapNumber<float>(newSpeeds[0] / mag, -1.f, 1.f, 0.f, 1.f);
+		dn.vel.y = mapNumber<float>(newSpeeds[1] / mag, -1.f, 1.f, 0.f, 1.f);
+		break;
+	}
+
+	case nodeType::WALL: {
+		dn.density = 1.f;
+		dn.vel = { 0,0 };
+		break;
+	}
+	}
+
 }
 
-inline bool bSimulator::inside(long long int x, long long int y)
+bool bSimulator::inside(long long int x, long long int y)
 {
 	return (x >= 0 && x < dimX && y >= 0 && y < dimY);
 }
 
+void bSimulator::cleanup()
+{
+	cudaDeviceSynchronize();
+	cudaFree(nodes);
+}

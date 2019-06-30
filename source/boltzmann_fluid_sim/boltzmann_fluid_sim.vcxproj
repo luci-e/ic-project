@@ -87,14 +87,16 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <CudaCompile Include="kernel.cu" />
+    <CudaCompile Include="bKernels.cu" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bSimulator.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bKernels.h" />
     <ClInclude Include="bSimulator.h" />
+    <ClInclude Include="bKernels.cuh" />
     <ClInclude Include="shaderHelper.h" />
     <ClInclude Include="utilities.h" />
   </ItemGroup>
