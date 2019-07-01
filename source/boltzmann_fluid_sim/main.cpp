@@ -18,7 +18,9 @@
 GLFWwindow* window;
 
 bSimulator* sim;
-StopWatchInterface* timer = NULL;
+
+StopWatchInterface* timerCompute = NULL;
+StopWatchInterface* timerGraphics = NULL;
 
 // Window properties
 int wWidth = 0, wHeight = 0;
@@ -82,14 +84,18 @@ int main()
 
 	//------------------------------------------------//
 
-	sdkCreateTimer(&timer);
-	sdkResetTimer(&timer);
+	sdkCreateTimer(&timerCompute);
+	sdkResetTimer(&timerCompute);
+
+	sdkCreateTimer(&timerGraphics);
+	sdkResetTimer(&timerGraphics);
 
 	sim = new bSimulator();
+	sim->testManagedMemory(sim);
 
 	Shader shd("vertex.glsl", "fragment.glsl");
 	shd.use();
-	sim->initSim(512, 512);
+	sim->initSim(1024, 1024);
 	sim->initNodes();
 	sim->initCudaOpenGLInterop();
 
@@ -102,17 +108,24 @@ int main()
 	// put the stuff we've been drawing onto the display
 	glfwSwapBuffers(window);
 
+	unsigned int renderCounter = 0;
+
 	while (!glfwWindowShouldClose(window)) {
-		sdkStartTimer(&timer);
-		sim->CPUUpdate();
-		sdkStopTimer(&timer);
+		renderCounter++;
 
-		printf("Elapsed computing time: %f\n", sdkGetTimerValue(&timer));
+		sdkStartTimer(&timerCompute);
+		sim->GPUUpdate();
+		sdkStopTimer(&timerCompute);
 
-		sdkStartTimer(&timer);
-		sim->GPUUpdateGraphics();
-		sdkStopTimer(&timer);
-		printf("Elapsed rendering time: %f\n", sdkGetTimerValue(&timer));
+		printf("Elapsed computing time: %f\n", sdkGetAverageTimerValue(&timerCompute));
+
+		sdkStartTimer(&timerGraphics);
+		if (renderCounter == 1) {
+			sim->GPUUpdateGraphics();
+			renderCounter = 0;
+		}
+		sdkStopTimer(&timerGraphics);
+		printf("Elapsed rendering time: %f\n", sdkGetAverageTimerValue(&timerGraphics));
 
 		// wipe the drawing surface clear
 		glClearColor(0,0,0, 1.0f);

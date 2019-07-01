@@ -5,11 +5,8 @@
 #include "bKernels.cuh"
 #include "utilities.h"
 #include "bSimulator.h"
-
-#include "helper_timer.h"
 #include "bKernels.h"
 
-StopWatchInterface* timerk = NULL;
 
 __device__ inline bool inside(long long int x, long long int y, unsigned long long int maxX, unsigned long long int maxY){
 	return (x >= 0 && x < maxX && y >= 0 && y < maxY);
@@ -117,7 +114,7 @@ cudaStream(bSimulator* sim) {
 			long long int newX = n.x + dx;
 			long long int newY = n.y + dy;
 
-			if (!inside(x, y, sim->dimX, sim->dimY)) {
+			if (!inside(newX, newY, sim->dimX, sim->dimY)) {
 				switch (sim->doAtEdge) {
 
 				case bSimulator::edgeBehaviour::LOOP: {
@@ -127,7 +124,6 @@ cudaStream(bSimulator* sim) {
 					bSimulator::node& nn = *(sim->nodes + newY * sim->dimX + newX);
 
 					n.newDensities[opposite] += nn.densities[opposite];
-					n.densities[j] = 0;
 					break;
 				}
 
@@ -146,13 +142,11 @@ cudaStream(bSimulator* sim) {
 			switch (nn.ntype) {
 			case bSimulator::nodeType::BASE: {
 				n.newDensities[opposite] += nn.densities[opposite];
-				n.densities[j] = 0;
 				break;
 			}
 
 			case bSimulator::nodeType::WALL: {
 				n.newDensities[opposite] += n.densities[j];
-				n.densities[j] = 0;
 				break;
 			}
 			}
@@ -209,59 +203,23 @@ cudaUpdateGraphics(bSimulator* sim)
 
 extern "C" {
 	void computeVelocity(bSimulator* sim) {
-
-		sdkCreateTimer(&timerk);
-		sdkResetTimer(&timerk);
-
-		sdkStartTimer(&timerk);
 		cudaComputeVelocity << < sim->gridDim, sim->blockDim >> > (sim);
-		cudaDeviceSynchronize();
-		sdkStopTimer(&timerk);
-
-		printf("Elapsed velocity time: %f\n", sdkGetTimerValue(&timerk));
 	}
 	
 	void computeEquilibrium(bSimulator* sim){
-		sdkCreateTimer(&timerk);
-		sdkResetTimer(&timerk);
-
-		sdkStartTimer(&timerk);
 		cudaComputeEquilibrium << < sim->gridDim, sim->blockDim >> > (sim);
-		cudaDeviceSynchronize();
-		sdkStopTimer(&timerk);
-
-		printf("Elapsed equilibrium time: %f\n", sdkGetTimerValue(&timerk));
-
 	}
 	
 	void computeNew(bSimulator* sim){
-		sdkCreateTimer(&timerk);
-		sdkResetTimer(&timerk);
-
-		sdkStartTimer(&timerk);
 		cudaComputeNew << < sim->gridDim, sim->blockDim >> > (sim);
-		cudaDeviceSynchronize();
-		sdkStopTimer(&timerk);
-
-		printf("Elapsed new time: %f\n", sdkGetTimerValue(&timerk));
-
 	}
 	
 	void stream(bSimulator* sim){
 		cudaStream <<< sim->gridDim, sim->blockDim >>> (sim);
-		cudaDeviceSynchronize();
 	}
+
 	void updateGraphics(bSimulator* sim)
 	{
-		cudaGraphicsMapResources(1, &sim->cudaVboNodes, 0);
-		cudaGraphicsResourceGetMappedPointer((void**)&sim->cudaGLNodes,
-			&sim->cudaGLNodesSize,
-			sim->cudaVboNodes);
-
-
 		cudaUpdateGraphics << < sim->gridDim, sim->blockDim >> > (sim);
-		cudaDeviceSynchronize();
-
-		cudaGraphicsUnmapResources(1, &sim->cudaVboNodes, 0);
 	}
 }

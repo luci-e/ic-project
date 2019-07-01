@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "utilities.h"
 #include "bKernels.h"
+#include <cassert>
 
 void bSimulator::CPUUpdate()
 {
@@ -155,49 +156,57 @@ void bSimulator::CPUUpdateGraphics()
 
 void bSimulator::GPUUpdate()
 {
-//	GPUstream();
-	CPUstream();
+	cudaMemPrefetchAsync(nodes, totalPoints * sizeof(node), 0);
 
-	//GPUComputeVelocity();
-	CPUComputeVelocity();
-	cudaMemPrefetchAsync(this, sizeof(bSimulator), 0);
-	cudaMemPrefetchAsync(nodes, sizeof(node) * totalPoints, 0);
-
+	GPUstream();
+	GPUComputeVelocity();
 	GPUcomputeEquilibrium();
 	GPUcomputeNew();
-	cudaMemPrefetchAsync(nodes, sizeof(node) * totalPoints, cudaCpuDeviceId);
-
 }
 
 void bSimulator::GPUComputeVelocity()
 {
 	computeVelocity(this);
+	cudaDeviceSynchronize();
 }
 
 void bSimulator::GPUcomputeEquilibrium()
 {
 	computeEquilibrium(this);
+	cudaDeviceSynchronize();
 }
 
 void bSimulator::GPUcomputeNew()
 {
 	computeNew(this);
+	cudaDeviceSynchronize();
 }
 
 void bSimulator::GPUstream()
 {
 	stream(this);
+	cudaDeviceSynchronize();
 }
 
 void bSimulator::GPUUpdateGraphics()
 {
+	cudaGraphicsMapResources(1, &cudaVboNodes);
+
+	cudaGraphicsResourceGetMappedPointer((void**)& cudaGLNodes,
+		&cudaGLNodesSize,
+		cudaVboNodes);
+
 	updateGraphics(this);
+	cudaDeviceSynchronize();
+	cudaGraphicsUnmapResources(1, &cudaVboNodes);
+
 }
 
 void bSimulator::initCudaOpenGLInterop()
 {
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsRegisterFlagsWriteDiscard);
+	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsMapFlagsWriteDiscard);
+	printf("Memory copy result %d ", cudaGetLastError());
 }
 
 int bSimulator::initNodes()
@@ -354,5 +363,11 @@ bool bSimulator::inside(long long int x, long long int y)
 void bSimulator::cleanup()
 {
 	cudaDeviceSynchronize();
+	cudaGraphicsUnregisterResource(cudaVboNodes);
 	cudaFree(nodes);
+}
+
+void bSimulator::testManagedMemory(bSimulator* sim)
+{
+	assert(sim == this);
 }

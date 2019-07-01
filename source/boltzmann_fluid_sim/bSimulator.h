@@ -13,12 +13,6 @@
 #include <cuda_gl_interop.h>
 
 
-#ifdef __CUDACC__
-#define CUDA_CALLABLE_MEMBER __host__ __device__
-#else
-#define CUDA_CALLABLE_MEMBER
-#endif 
-
 #define SQRT2 1.41421356237
 
 class Managed {
@@ -41,12 +35,12 @@ class bSimulator : public Managed
 {
 public:
 
-	enum edgeBehaviour{
+	enum edgeBehaviour {
 		LOOP,
 		EXIT
 	};
 
-	enum nodeType{
+	enum nodeType {
 		BASE,
 		WALL
 	};
@@ -122,6 +116,7 @@ public:
 
 	// Particle data
 	node* nodes = NULL;
+
 	GLuint nodesBuffer = 0;                 // OpenGL vertex buffer object
 	GLuint vao = 0;                 // OpenGL vertex buffer object
 
@@ -168,6 +163,8 @@ public:
 	bool inside(long long int x, long long int y);
 
 	void cleanup();
+
+	void testManagedMemory(bSimulator *sim);
 };
 
 #endif // !__B_SIMULATOR__
