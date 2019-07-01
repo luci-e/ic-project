@@ -11,7 +11,6 @@ void bSimulator::CPUUpdate()
 	CPUComputeVelocity();
 	CPUcomputeEquilibrium();
 	CPUcomputeNew();
-	updateDisplayNodes();
 }
 
 void bSimulator::CPUComputeVelocity()
@@ -109,7 +108,7 @@ void bSimulator::CPUstream()
 					}
 
 					case edgeBehaviour::EXIT: {
-						n.densities[j] = 0;
+						n.newDensities[j] = 0;
 						break;
 					}
 
@@ -149,13 +148,25 @@ void bSimulator::CPUstream()
 
 }
 
+void bSimulator::CPUUpdateGraphics()
+{
+	updateDisplayNodes();
+}
+
 void bSimulator::GPUUpdate()
 {
-	GPUstream();
-	GPUComputeVelocity();
+//	GPUstream();
+	CPUstream();
+
+	//GPUComputeVelocity();
+	CPUComputeVelocity();
+	cudaMemPrefetchAsync(this, sizeof(bSimulator), 0);
+	cudaMemPrefetchAsync(nodes, sizeof(node) * totalPoints, 0);
+
 	GPUcomputeEquilibrium();
 	GPUcomputeNew();
-	updateDisplayNodes();
+	cudaMemPrefetchAsync(nodes, sizeof(node) * totalPoints, cudaCpuDeviceId);
+
 }
 
 void bSimulator::GPUComputeVelocity()
@@ -178,6 +189,16 @@ void bSimulator::GPUstream()
 	stream(this);
 }
 
+void bSimulator::GPUUpdateGraphics()
+{
+	updateGraphics(this);
+}
+
+void bSimulator::initCudaOpenGLInterop()
+{
+	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
+	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsRegisterFlagsWriteDiscard);
+}
 
 int bSimulator::initNodes()
 {
@@ -228,7 +249,7 @@ int bSimulator::initDisplayNodes()
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
 	glBufferData(GL_ARRAY_BUFFER, totalPoints * sizeof(displayNode), NULL, GL_DYNAMIC_DRAW);
 
-	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
 
 	if (displayNodes == NULL) {
 		printf("Error while mapping the buffer into client memory!\n");
@@ -273,7 +294,7 @@ int bSimulator::initDisplayNodes()
 int bSimulator::updateDisplayNodes()
 {
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
 
 	if (displayNodes == NULL) {
 		return -1;

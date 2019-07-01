@@ -1,5 +1,4 @@
 #pragma once
-#include <numeric>      
 
 #ifdef __CUDACC__
 #define CUDA_CALLABLE __host__ __device__

@@ -17,11 +17,16 @@ cudaComputeNew(bSimulator* sim);
 __global__ void
 cudaStream(bSimulator* sim);
 
+__global__ void
+cudaUpdateGraphics(bSimulator* sim);
+
 extern "C" {
 	void computeVelocity(bSimulator* sim);
 	void computeEquilibrium(bSimulator* sim);
 	void computeNew(bSimulator* sim);
 	void stream(bSimulator* sim);
+	void updateGraphics(bSimulator* sim);
+
 }
 
 #endif

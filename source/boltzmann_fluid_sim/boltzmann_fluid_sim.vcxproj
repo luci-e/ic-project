@@ -97,6 +97,8 @@
     <ClInclude Include="bKernels.h" />
     <ClInclude Include="bSimulator.h" />
     <ClInclude Include="bKernels.cuh" />
+    <ClInclude Include="exception.h" />
+    <ClInclude Include="helper_timer.h" />
     <ClInclude Include="shaderHelper.h" />
     <ClInclude Include="utilities.h" />
   </ItemGroup>

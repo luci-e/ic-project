@@ -13,10 +13,12 @@
 
 #include "shaderHelper.h"
 #include "bSimulator.h"
+#include "helper_timer.h"
 
 GLFWwindow* window;
 
 bSimulator* sim;
+StopWatchInterface* timer = NULL;
 
 // Window properties
 int wWidth = 0, wHeight = 0;
@@ -80,12 +82,16 @@ int main()
 
 	//------------------------------------------------//
 
+	sdkCreateTimer(&timer);
+	sdkResetTimer(&timer);
+
 	sim = new bSimulator();
 
 	Shader shd("vertex.glsl", "fragment.glsl");
 	shd.use();
-	sim->initSim(256, 256);
+	sim->initSim(512, 512);
 	sim->initNodes();
+	sim->initCudaOpenGLInterop();
 
 	// wipe the drawing surface clear
 	glClearColor(0, 0, 0, 1.0f);
@@ -97,7 +103,17 @@ int main()
 	glfwSwapBuffers(window);
 
 	while (!glfwWindowShouldClose(window)) {
-		sim->GPUUpdate();
+		sdkStartTimer(&timer);
+		sim->CPUUpdate();
+		sdkStopTimer(&timer);
+
+		printf("Elapsed computing time: %f\n", sdkGetTimerValue(&timer));
+
+		sdkStartTimer(&timer);
+		sim->GPUUpdateGraphics();
+		sdkStopTimer(&timer);
+		printf("Elapsed rendering time: %f\n", sdkGetTimerValue(&timer));
+
 		// wipe the drawing surface clear
 		glClearColor(0,0,0, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

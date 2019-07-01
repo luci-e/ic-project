@@ -67,7 +67,6 @@ public:
 
 		float2 vel;
 		float2 addVel;
-
 	};
 
 	float weights[9] = { 4.f / 9.f,
@@ -106,7 +105,7 @@ public:
 
 	dim3 gridDim;
 	dim3 blockDim = { 16, 16 };
-	unsigned long long int dimX = 256, dimY = 256;
+	unsigned long long int dimX = 16, dimY = 16;
 	edgeBehaviour doAtEdge = edgeBehaviour::LOOP;
 
 	double temperature = 1;
@@ -115,10 +114,11 @@ public:
 	double c = 0;
 	double csqr = 0;
 	double viscosity = 1.0;
-	float testVar;
 
 	unsigned long long int totalPoints = 0;
-	struct cudaGraphicsResource* cuda_vbo_resource = NULL; // handles OpenGL-CUDA exchange
+	struct cudaGraphicsResource* cudaVboNodes = NULL; // handles OpenGL-CUDA exchange
+	displayNode* cudaGLNodes = NULL;
+	size_t cudaGLNodesSize;
 
 	// Particle data
 	node* nodes = NULL;
@@ -130,17 +130,18 @@ public:
 	void initSim(unsigned long long int dimX = 256, unsigned long long int dimY = 256) {
 		totalPoints = dimX * dimY;
 		csqr = 3.f * boltzmann_k * temperature / mass;
-		printf("Csqr is :%lf", csqr);
+		printf("Csqr is :%lf\n", csqr);
 		c = sqrt(csqr);
 
 		this->dimX = dimX;
 		this->dimY = dimY;
 
 		gridDim = {
-			(unsigned int)ceil((double)dimX / (double)blockDim.x),
-			(unsigned int)ceil((double)dimY / (double)blockDim.y),
-			1
+			(unsigned int) ceil((double)dimX / (double)blockDim.x),
+			(unsigned int) ceil((double)dimY / (double)blockDim.y)
 		};
+
+		printf("Grid dim: %u %u \nBlock dim: %u %u\n", gridDim.x, gridDim.y, blockDim.x, blockDim.y);
 	};
 
 	void CPUUpdate();
@@ -148,12 +149,15 @@ public:
 	void CPUcomputeEquilibrium();
 	void CPUcomputeNew();
 	void CPUstream();
+	void CPUUpdateGraphics();
 
 	void GPUUpdate();
 	void GPUComputeVelocity();
 	void GPUcomputeEquilibrium();
 	void GPUcomputeNew();
 	void GPUstream();
+	void GPUUpdateGraphics();
+	void initCudaOpenGLInterop();
 
 	int initNodes();
 	int initDisplayNodes();
