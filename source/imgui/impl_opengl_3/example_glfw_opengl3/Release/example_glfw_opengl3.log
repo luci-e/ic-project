@@ -1,0 +1,7 @@
+﻿  imgui.cpp
+  imgui_demo.cpp
+  imgui_draw.cpp
+  imgui_widgets.cpp
+  imgui_impl_glfw.cpp
+  imgui_impl_opengl3.cpp
+  example_glfw_opengl3.vcxproj -> D:\source\repos\ic-project\source\imgui\impl_opengl_3\example_glfw_opengl3\Release\imgui_glfw_opengl3.lib

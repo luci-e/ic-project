@@ -4,6 +4,8 @@
 #include "device_launch_parameters.h"
 #include "bKernels.cuh"
 #include "utilities.h"
+#include <stdio.h>
+#include <string.h>
 #include "bSimulator.h"
 #include "bKernels.h"
 
@@ -114,6 +116,8 @@ cudaStream(bSimulator* sim) {
 			long long int newX = n.x + dx;
 			long long int newY = n.y + dy;
 
+			bSimulator::node* nn = nullptr;
+
 			if (!inside(newX, newY, sim->dimX, sim->dimY)) {
 				switch (sim->doAtEdge) {
 
@@ -121,27 +125,24 @@ cudaStream(bSimulator* sim) {
 					newX = (newX + sim->dimX) % sim->dimX;
 					newY = (newY + sim->dimY) % sim->dimY;
 
-					bSimulator::node& nn = *(sim->nodes + newY * sim->dimX + newX);
-
-					n.newDensities[opposite] += nn.densities[opposite];
+					nn = (sim->nodes + newY * sim->dimX + newX);
 					break;
 				}
 
 				case bSimulator::edgeBehaviour::EXIT: {
 					n.newDensities[j] = 0;
-					break;
+					continue;
 				}
 
 				}
-
-				continue;
+			}
+			else {
+				nn = (sim->nodes + newY * sim->dimX + newX);
 			}
 
-			bSimulator::node& nn = *(sim->nodes + newY * sim->dimX + newX);
-
-			switch (nn.ntype) {
+			switch (nn->ntype) {
 			case bSimulator::nodeType::BASE: {
-				n.newDensities[opposite] += nn.densities[opposite];
+				n.newDensities[opposite] += nn->densities[opposite];
 				break;
 			}
 

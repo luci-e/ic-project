@@ -11,34 +11,17 @@
 #include <GLFW/glfw3.h>
 
 #include <cuda_gl_interop.h>
-
-
-#define SQRT2 1.41421356237
-
-class Managed {
-public:
-	void* operator new(size_t len) {
-		void* ptr;
-		cudaMallocManaged(&ptr, len);
-		cudaDeviceSynchronize();
-		return ptr;
-	}
-
-	void operator delete(void* ptr) {
-		cudaDeviceSynchronize();
-		cudaFree(ptr);
-	}
-};
-
+#include "bCommon.h"
 
 class bSimulator : public Managed
 {
 public:
 
+
 	enum edgeBehaviour {
 		LOOP,
 		EXIT
-	};
+	} doAtEdge = edgeBehaviour::LOOP;
 
 	enum nodeType {
 		BASE,
@@ -96,11 +79,22 @@ public:
 							{1, 1}
 	};
 
+	float rectangleVertices[4*3] = {
+		1.0, 1.0, 0.0, // top right
+		-1.0, 1.0, 0.0, // top left
+		-1.0, -1.0, 0.0, // bottom left
+		1.0, -1.0, 0.0 // bottom right
+	};
+
+	unsigned int rectangleIndices[2*3] = {
+		0, 3, 1,
+		1, 3, 2
+	};
+	
 
 	dim3 gridDim;
 	dim3 blockDim = { 16, 16 };
 	unsigned long long int dimX = 16, dimY = 16;
-	edgeBehaviour doAtEdge = edgeBehaviour::LOOP;
 
 	double temperature = 1;
 	double mass = 2.992e-23;
@@ -125,6 +119,7 @@ public:
 	void initSim(unsigned long long int dimX = 256, unsigned long long int dimY = 256) {
 		totalPoints = dimX * dimY;
 		csqr = 3.f * boltzmann_k * temperature / mass;
+		csqr = 1;
 		printf("Csqr is :%lf\n", csqr);
 		c = sqrt(csqr);
 
@@ -163,8 +158,6 @@ public:
 	bool inside(long long int x, long long int y);
 
 	void cleanup();
-
-	void testManagedMemory(bSimulator *sim);
 };
 
 #endif // !__B_SIMULATOR__

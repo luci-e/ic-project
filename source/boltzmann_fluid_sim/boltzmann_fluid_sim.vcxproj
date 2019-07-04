@@ -41,12 +41,14 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\libs\glfw-3.3.bin.WIN64\include;D:\libs\glew-2.1.0\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\glfw-3.3\include;$(SolutionDir)..\glew-2.1.0\include;$(SolutionDir)..\imgui;$(SolutionDir)..\imgui\impl_opengl_3;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>D:\libs\glfw-3.3.bin.WIN64\include;D:\libs\glew-2.1.0\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)..\glfw-3.3\include;$(SolutionDir)..\glew-2.1.0\include;$(SolutionDir)..\imgui;$(SolutionDir)..\imgui\impl_opengl_3;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -58,8 +60,8 @@
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>glfw3.lib;glew32.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\libs\glfw-3.3.bin.WIN64\lib-vc2019;D:\libs\glew-2.1.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;glew32.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;opengl32.lib;imgui_glfw_opengl3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\glfw-3.3\lib-vc2019;$(SolutionDir)..\glew-2.1.0\lib\Release\x64;$(SolutionDir)..\imgui\impl_opengl_3\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -79,8 +81,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>glfw3.lib;glew32.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\libs\glfw-3.3.bin.WIN64\lib-vc2019;D:\libs\glew-2.1.0\lib\Release\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;glew32.lib;cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;opengl32.lib;imgui_glfw_opengl3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)..\glfw-3.3\lib-vc2019;$(SolutionDir)..\glew-2.1.0\lib\Release\x64;$(SolutionDir)..\imgui\impl_opengl_3\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
@@ -90,15 +92,15 @@
     <CudaCompile Include="bKernels.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="bApp.cpp" />
     <ClCompile Include="bSimulator.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bApp.h" />
     <ClInclude Include="bKernels.h" />
     <ClInclude Include="bSimulator.h" />
     <ClInclude Include="bKernels.cuh" />
-    <ClInclude Include="exception.h" />
-    <ClInclude Include="helper_timer.h" />
     <ClInclude Include="shaderHelper.h" />
     <ClInclude Include="utilities.h" />
   </ItemGroup>

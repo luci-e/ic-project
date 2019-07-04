@@ -80,7 +80,7 @@ void bSimulator::CPUstream()
 		node& n = *(nodes + i);
 
 		switch (n.ntype) {
-		case nodeType::BASE: {
+		case bSimulator::nodeType::BASE: {
 			for (int j = 0; j < 9; j++) {
 				int dx = directions[j][0];
 				int dy = directions[j][1];
@@ -90,47 +90,43 @@ void bSimulator::CPUstream()
 					continue;
 				}
 
+				int opposite = (j < 5) ? ((j - 1) + 2) % 4 + 1 : ((j - 5) + 2) % 4 + 5;
+
 				long long int newX = n.x + dx;
 				long long int newY = n.y + dy;
 
-				if (!inside(newX, newY)) {
+				bSimulator::node *nn = nullptr;
 
+				if (!inside(newX, newY)) {
 					switch (doAtEdge) {
 
-					case edgeBehaviour::LOOP: {
+					case bSimulator::edgeBehaviour::LOOP: {
 						newX = (newX + dimX) % dimX;
 						newY = (newY + dimY) % dimY;
 
-						node& nn = *(nodes + newY * dimX + newX);
-
-						nn.newDensities[j] += n.densities[j];
-						n.densities[j] = 0;
+						nn = (nodes + newY * dimX + newX);
 						break;
 					}
 
-					case edgeBehaviour::EXIT: {
+					case bSimulator::edgeBehaviour::EXIT: {
 						n.newDensities[j] = 0;
-						break;
+						continue;
 					}
 
 					}
-
-					continue;
+				}
+				else {
+					nn = (nodes + newY * dimX + newX);
 				}
 
-				node& nn = *(nodes + newY * dimX + newX);
-
-				switch (nn.ntype) {
-				case nodeType::BASE: {
-					nn.newDensities[j] += n.densities[j];
-					n.densities[j] = 0;
+				switch (nn->ntype) {
+				case bSimulator::nodeType::BASE: {
+					n.newDensities[opposite] += nn->densities[opposite];
 					break;
 				}
 
-				case nodeType::WALL: {
-					int opposite = (j < 5) ? ((j - 1) + 2) % 4 + 1 : ((j - 5) + 2) % 4 + 5;
+				case bSimulator::nodeType::WALL: {
 					n.newDensities[opposite] += n.densities[j];
-					n.densities[j] = 0;
 					break;
 				}
 				}
@@ -140,7 +136,7 @@ void bSimulator::CPUstream()
 			break;
 		}
 
-		case nodeType::WALL: {
+		case bSimulator::nodeType::WALL: {
 
 			break;
 		}
@@ -199,7 +195,6 @@ void bSimulator::GPUUpdateGraphics()
 	updateGraphics(this);
 	cudaDeviceSynchronize();
 	cudaGraphicsUnmapResources(1, &cudaVboNodes);
-
 }
 
 void bSimulator::initCudaOpenGLInterop()
@@ -211,6 +206,10 @@ void bSimulator::initCudaOpenGLInterop()
 
 int bSimulator::initNodes()
 {
+	std::default_random_engine generator;
+	std::uniform_int_distribution<int> pos_distribution(1, 8);
+	auto pos_dice = std::bind(pos_distribution, generator);
+
 	cudaMallocManaged(&nodes, sizeof(node) * totalPoints);
 	cudaDeviceSynchronize();
 
@@ -228,22 +227,8 @@ int bSimulator::initNodes()
 			memset(n.densities, 0.f, 9 * sizeof(float));
 			memset(n.newDensities, 0.f, 9 * sizeof(float));
 			memset(n.eqDensities, 0.f, 9 * sizeof(float));
-
-			// ********************************************* //
-
-			if (x > 20 && x < 100 && y > 20 && y < 100) {
-				n.densities[0] = .9f;
-				n.densities[1] = .1f;
-			}
-			else {
-				n.densities[0] = 1.f;
-			}
-
-			if (x > 100 && x < 200 && y > 100 && y < 200) {
-				n.ntype = nodeType::WALL;
-			}
-
-			// ********************************************* //
+			n.densities[0] = 11;
+			n.densities[pos_dice()] = 5;
 		}
 	}
 
@@ -365,9 +350,6 @@ void bSimulator::cleanup()
 	cudaDeviceSynchronize();
 	cudaGraphicsUnregisterResource(cudaVboNodes);
 	cudaFree(nodes);
-}
-
-void bSimulator::testManagedMemory(bSimulator* sim)
-{
-	assert(sim == this);
+	glDeleteVertexArrays(1, &vao);
+	glDeleteBuffers(1, &nodesBuffer);
 }
