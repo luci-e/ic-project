@@ -93,20 +93,24 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="bApp.cpp" />
+    <ClCompile Include="bRenderer.cpp" />
     <ClCompile Include="bSimulator.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bApp.h" />
-    <ClInclude Include="bKernels.h" />
-    <ClInclude Include="bSimulator.h" />
+    <ClInclude Include="bCommon.h" />
     <ClInclude Include="bKernels.cuh" />
+    <ClInclude Include="bRenderer.h" />
+    <ClInclude Include="bSimulator.h" />
     <ClInclude Include="shaderHelper.h" />
     <ClInclude Include="utilities.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="fragment.glsl" />
-    <None Include="vertex.glsl" />
+    <None Include="pointsFragment.glsl" />
+    <None Include="pointsShader.glsl" />
+    <None Include="textureFragment.glsl" />
+    <None Include="textureShader.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

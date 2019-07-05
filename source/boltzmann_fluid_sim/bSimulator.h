@@ -16,35 +16,10 @@
 class bSimulator : public Managed
 {
 public:
-
-
 	enum edgeBehaviour {
 		LOOP,
 		EXIT
 	} doAtEdge = edgeBehaviour::LOOP;
-
-	enum nodeType {
-		BASE,
-		WALL
-	};
-
-	struct displayNode {
-		float2 pos;
-		float2 vel;
-		float density;
-		nodeType ntype;
-	};
-
-	struct node {
-		nodeType ntype;
-		long long int x, y;
-		float densities[9];
-		float newDensities[9];
-		float eqDensities[9];
-
-		float2 vel;
-		float2 addVel;
-	};
 
 	float weights[9] = { 4.f / 9.f,
 						1.f / 9.f,
@@ -79,19 +54,6 @@ public:
 							{1, 1}
 	};
 
-	float rectangleVertices[4*3] = {
-		1.0, 1.0, 0.0, // top right
-		-1.0, 1.0, 0.0, // top left
-		-1.0, -1.0, 0.0, // bottom left
-		1.0, -1.0, 0.0 // bottom right
-	};
-
-	unsigned int rectangleIndices[2*3] = {
-		0, 3, 1,
-		1, 3, 2
-	};
-	
-
 	dim3 gridDim;
 	dim3 blockDim = { 16, 16 };
 	unsigned long long int dimX = 16, dimY = 16;
@@ -104,15 +66,9 @@ public:
 	double viscosity = 1.0;
 
 	unsigned long long int totalPoints = 0;
-	struct cudaGraphicsResource* cudaVboNodes = NULL; // handles OpenGL-CUDA exchange
-	displayNode* cudaGLNodes = NULL;
-	size_t cudaGLNodesSize;
 
 	// Particle data
 	node* nodes = NULL;
-
-	GLuint nodesBuffer = 0;                 // OpenGL vertex buffer object
-	GLuint vao = 0;                 // OpenGL vertex buffer object
 
 	bSimulator() {};
 
@@ -139,22 +95,14 @@ public:
 	void CPUcomputeEquilibrium();
 	void CPUcomputeNew();
 	void CPUstream();
-	void CPUUpdateGraphics();
 
 	void GPUUpdate();
 	void GPUComputeVelocity();
 	void GPUcomputeEquilibrium();
 	void GPUcomputeNew();
 	void GPUstream();
-	void GPUUpdateGraphics();
-	void initCudaOpenGLInterop();
 
 	int initNodes();
-	int initDisplayNodes();
-	int updateDisplayNodes();
-	void initDisplayNode(const node& n, displayNode& dn);
-	void updateDisplayNode(const node& n, displayNode& dn);
-
 	bool inside(long long int x, long long int y);
 
 	void cleanup();

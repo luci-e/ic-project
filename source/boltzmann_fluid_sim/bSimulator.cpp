@@ -3,7 +3,7 @@
 #include <functional> 
 #include <algorithm>
 #include "utilities.h"
-#include "bKernels.h"
+#include "bKernels.cuh"
 #include <cassert>
 
 void bSimulator::CPUUpdate()
@@ -80,7 +80,7 @@ void bSimulator::CPUstream()
 		node& n = *(nodes + i);
 
 		switch (n.ntype) {
-		case bSimulator::nodeType::BASE: {
+		case nodeType::BASE: {
 			for (int j = 0; j < 9; j++) {
 				int dx = directions[j][0];
 				int dy = directions[j][1];
@@ -95,7 +95,7 @@ void bSimulator::CPUstream()
 				long long int newX = n.x + dx;
 				long long int newY = n.y + dy;
 
-				bSimulator::node *nn = nullptr;
+				node *nn = nullptr;
 
 				if (!inside(newX, newY)) {
 					switch (doAtEdge) {
@@ -120,12 +120,12 @@ void bSimulator::CPUstream()
 				}
 
 				switch (nn->ntype) {
-				case bSimulator::nodeType::BASE: {
+				case nodeType::BASE: {
 					n.newDensities[opposite] += nn->densities[opposite];
 					break;
 				}
 
-				case bSimulator::nodeType::WALL: {
+				case nodeType::WALL: {
 					n.newDensities[opposite] += n.densities[j];
 					break;
 				}
@@ -136,18 +136,13 @@ void bSimulator::CPUstream()
 			break;
 		}
 
-		case bSimulator::nodeType::WALL: {
+		case nodeType::WALL: {
 
 			break;
 		}
 		}
 	}
 
-}
-
-void bSimulator::CPUUpdateGraphics()
-{
-	updateDisplayNodes();
 }
 
 void bSimulator::GPUUpdate()
@@ -184,26 +179,6 @@ void bSimulator::GPUstream()
 	cudaDeviceSynchronize();
 }
 
-void bSimulator::GPUUpdateGraphics()
-{
-	cudaGraphicsMapResources(1, &cudaVboNodes);
-
-	cudaGraphicsResourceGetMappedPointer((void**)& cudaGLNodes,
-		&cudaGLNodesSize,
-		cudaVboNodes);
-
-	updateGraphics(this);
-	cudaDeviceSynchronize();
-	cudaGraphicsUnmapResources(1, &cudaVboNodes);
-}
-
-void bSimulator::initCudaOpenGLInterop()
-{
-	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsMapFlagsWriteDiscard);
-	printf("Memory copy result %d ", cudaGetLastError());
-}
-
 int bSimulator::initNodes()
 {
 	std::default_random_engine generator;
@@ -232,112 +207,7 @@ int bSimulator::initNodes()
 		}
 	}
 
-	initDisplayNodes();
-
 	return 0;
-}
-
-int bSimulator::initDisplayNodes()
-{
-	glGenBuffers(1, &nodesBuffer);
-	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	glBufferData(GL_ARRAY_BUFFER, totalPoints * sizeof(displayNode), NULL, GL_DYNAMIC_DRAW);
-
-	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
-
-	if (displayNodes == NULL) {
-		printf("Error while mapping the buffer into client memory!\n");
-		return -1;
-	}
-	else {
-		printf("Successfully mapped buffer into client memory!\n");
-	}
-
-	// Initialize the nodes that will be displayed
-	for (auto y = 0; y < dimY; y++) {
-		for (auto x = 0; x < dimX; x++) {
-			displayNode& dn = *(displayNodes + y * dimX + x);
-			node& n = *(nodes + y * dimX + x);
-			initDisplayNode(n, dn);
-		}
-	}
-
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-
-	GLint size = 0;
-	glGetBufferParameteriv(GL_ARRAY_BUFFER, GL_BUFFER_SIZE, &size);
-	printf("Allocated buffer size %d\n", size);
-
-	glGenVertexArrays(1, &vao);
-	glBindVertexArray(vao);
-	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-
-	// Set the positions
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(displayNode), NULL);
-	glEnableVertexAttribArray(0);
-	// Set the velocity
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(displayNode), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
-	// Set the density
-	glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(displayNode), (void*)(2 * sizeof(float) + 2 * sizeof(float)));
-	glEnableVertexAttribArray(2);
-
-	return 0;
-}
-
-int bSimulator::updateDisplayNodes()
-{
-	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
-	displayNode* displayNodes = (displayNode*)glMapBuffer(GL_ARRAY_BUFFER, GL_READ_WRITE);
-
-	if (displayNodes == NULL) {
-		return -1;
-	}
-
-	// Initialize the nodes that will be displayed
-	for (auto y = 0; y < dimY; y++) {
-		for (auto x = 0; x < dimX; x++) {
-			displayNode& dn = *(displayNodes + y * dimX + x);
-			node& n = *(nodes + y * dimX + x);
-			updateDisplayNode(n, dn);
-		}
-	}
-
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-}
-
-void bSimulator::initDisplayNode(const node& n, displayNode& dn)
-{
-	dn.ntype = n.ntype;
-
-	dn.pos.x = mapNumber<float>(n.x, 0, dimX, -1.f, 1.f);
-	dn.pos.y = mapNumber<float>(n.y, 0, dimY, -1.f, 1.f);
-
-	updateDisplayNode(n, dn);
-}
-
-void bSimulator::updateDisplayNode(const node& n, displayNode& dn)
-{
-
-	switch (n.ntype) {
-	case nodeType::BASE: {
-		dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 1.f, 0.f, 1.f);
-
-		float newSpeeds[2] = { n.vel.x, n.vel.y };
-		double mag = magnitude(newSpeeds, 2);
-
-		dn.vel.x = mapNumber<float>(newSpeeds[0] / mag, -1.f, 1.f, 0.f, 1.f);
-		dn.vel.y = mapNumber<float>(newSpeeds[1] / mag, -1.f, 1.f, 0.f, 1.f);
-		break;
-	}
-
-	case nodeType::WALL: {
-		dn.density = 1.f;
-		dn.vel = { 0,0 };
-		break;
-	}
-	}
-
 }
 
 bool bSimulator::inside(long long int x, long long int y)
@@ -348,8 +218,5 @@ bool bSimulator::inside(long long int x, long long int y)
 void bSimulator::cleanup()
 {
 	cudaDeviceSynchronize();
-	cudaGraphicsUnregisterResource(cudaVboNodes);
 	cudaFree(nodes);
-	glDeleteVertexArrays(1, &vao);
-	glDeleteBuffers(1, &nodesBuffer);
 }

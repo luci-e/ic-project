@@ -1,14 +1,13 @@
-#pragma once
-
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include "bKernels.cuh"
-#include "utilities.h"
 #include <stdio.h>
 #include <string.h>
-#include "bSimulator.h"
-#include "bKernels.h"
 
+#include "utilities.h"
+#include "bKernels.cuh"
+#include "bCommon.h"
+#include "bSimulator.h"
+#include "bRenderer.h"
 
 __device__ inline bool inside(long long int x, long long int y, unsigned long long int maxX, unsigned long long int maxY){
 	return (x >= 0 && x < maxX && y >= 0 && y < maxY);
@@ -25,9 +24,9 @@ cudaComputeVelocity(bSimulator* sim) {
 
 	unsigned long long int elementIdx = y * sim->dimX + x;
 
-	bSimulator::node& n = *(sim->nodes + elementIdx);
+	node& n = *(sim->nodes + elementIdx);
 
-	if (n.ntype == bSimulator::nodeType::BASE) {
+	if (n.ntype == nodeType::BASE) {
 		float macroVel[2];
 
 		float density = sum(n.newDensities, 9);
@@ -49,8 +48,8 @@ cudaComputeEquilibrium(bSimulator* sim) {
 
 	unsigned long long int elementIdx = y * sim->dimX + x;
 
-	bSimulator::node& n = *(sim->nodes + elementIdx);
-	if (n.ntype == bSimulator::nodeType::BASE) {
+	node& n = *(sim->nodes + elementIdx);
+	if (n.ntype == nodeType::BASE) {
 
 		float density = sum(n.newDensities, 9);
 		float macroVel[2] = { n.vel.x, n.vel.y };
@@ -76,8 +75,9 @@ cudaComputeNew(bSimulator* sim) {
 	unsigned long long int elementIdx = y * sim->dimX + x;
 
 
-	bSimulator::node& n = *(sim->nodes + elementIdx);
-	if (n.ntype == bSimulator::nodeType::BASE) {
+	node& n = *(sim->nodes + elementIdx);
+	if (n.ntype == nodeType::BASE) {
+
 		float newDensities[9];
 
 		vecSub(n.eqDensities, n.newDensities, newDensities, 9);
@@ -97,11 +97,11 @@ cudaStream(bSimulator* sim) {
 		return;
 
 	unsigned long long int elementIdx = y * sim->dimX + x;
-	bSimulator::node& n = *(sim->nodes + elementIdx);
+	node& n = *(sim->nodes + elementIdx);
 
 
 	switch (n.ntype) {
-	case bSimulator::nodeType::BASE: {
+	case nodeType::BASE: {
 		for (int j = 0; j < 9; j++) {
 			int dx = sim->directions[j][0];
 			int dy = sim->directions[j][1];
@@ -116,7 +116,7 @@ cudaStream(bSimulator* sim) {
 			long long int newX = n.x + dx;
 			long long int newY = n.y + dy;
 
-			bSimulator::node* nn = nullptr;
+			node* nn = nullptr;
 
 			if (!inside(newX, newY, sim->dimX, sim->dimY)) {
 				switch (sim->doAtEdge) {
@@ -141,12 +141,12 @@ cudaStream(bSimulator* sim) {
 			}
 
 			switch (nn->ntype) {
-			case bSimulator::nodeType::BASE: {
+			case nodeType::BASE: {
 				n.newDensities[opposite] += nn->densities[opposite];
 				break;
 			}
 
-			case bSimulator::nodeType::WALL: {
+			case nodeType::WALL: {
 				n.newDensities[opposite] += n.densities[j];
 				break;
 			}
@@ -157,7 +157,7 @@ cudaStream(bSimulator* sim) {
 		break;
 	}
 
-	case bSimulator::nodeType::WALL: {
+	case nodeType::WALL: {
 
 		break;
 	}
@@ -167,21 +167,21 @@ cudaStream(bSimulator* sim) {
 }
 
 __global__ void
-cudaUpdateGraphics(bSimulator* sim)
+cudaUpdateGraphics(bRenderer* simR)
 {
 	unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
 
-	if (x >= sim->dimX || y >= sim->dimY)
+	if (x >= simR->sim->dimX || y >= simR->sim->dimY)
 		return;
 
-	unsigned long long int elementIdx = y * sim->dimX + x;
+	unsigned long long int elementIdx = y * simR->sim->dimX + x;
 
-	bSimulator::node& n = *(sim->nodes + elementIdx);
-	bSimulator::displayNode& dn = *(sim->cudaGLNodes + elementIdx);
+	node& n = *(simR->sim->nodes + elementIdx);
+	bRenderer::displayNode& dn = *(simR->cudaGLNodes + elementIdx);
 
 	switch (n.ntype) {
-	case bSimulator::nodeType::BASE: {
+	case nodeType::BASE: {
 		dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 1.f, 0.f, 1.f);
 
 		float newSpeeds[2] = { n.vel.x, n.vel.y };
@@ -192,7 +192,7 @@ cudaUpdateGraphics(bSimulator* sim)
 		break;
 	}
 
-	case bSimulator::nodeType::WALL: {
+	case nodeType::WALL: {
 		dn.density = 1.f;
 		dn.vel = { 0,0 };
 		break;
@@ -219,8 +219,8 @@ extern "C" {
 		cudaStream <<< sim->gridDim, sim->blockDim >>> (sim);
 	}
 
-	void updateGraphics(bSimulator* sim)
+	void updateGraphics(bRenderer* simR)
 	{
-		cudaUpdateGraphics << < sim->gridDim, sim->blockDim >> > (sim);
+		cudaUpdateGraphics << < simR->sim->gridDim, simR->sim->blockDim >> > (simR);
 	}
 }

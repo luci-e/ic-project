@@ -10,10 +10,12 @@
 #include <stdio.h>
 #include <string>
 
-#include "shaderHelper.h"
 #include "bSimulator.h"
+#include "bRenderer.h"
+
 #include "helper_timer.h"
 #include "CLI11.hpp"
+
 class bApp
 {
 public:
@@ -31,11 +33,11 @@ public:
 
 
 	CLI::App app{ "Lattice Boltzmann Fluid Sim" };
-	Shader shd;
 
 	GLFWwindow* window;
 
 	bSimulator* sim;
+	bRenderer* simR;
 
 	StopWatchInterface* timerCompute = NULL;
 	StopWatchInterface* timerGraphics = NULL;

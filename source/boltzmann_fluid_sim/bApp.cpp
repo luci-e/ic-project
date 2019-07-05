@@ -10,6 +10,8 @@
 
 #include "shaderHelper.h"
 #include "bSimulator.h"
+#include "bRenderer.h"
+
 #include "helper_timer.h"
 #include "CLI11.hpp"
 #include "imgui.h"
@@ -48,7 +50,6 @@ int bApp::initGL()
 		return -1;
 
 	}
-	shd = Shader("vertex.glsl", "fragment.glsl");
 
 	// get version info
 	const GLubyte* renderer = glGetString(GL_RENDERER); // get renderer string
@@ -89,6 +90,7 @@ int bApp::initSim(int argc, char** argv)
 	CLI11_PARSE(app, argc, argv);
 
 	sim = new bSimulator();
+	simR = new bRenderer(sim);
 
 	// Initialize the timers for computing time and rendering measurements
 	sdkCreateTimer(&timerCompute);
@@ -97,9 +99,10 @@ int bApp::initSim(int argc, char** argv)
 	sdkCreateTimer(&timerGraphics);
 	sdkResetTimer(&timerGraphics);
 
-	shd.use();
 	sim->initSim(size[0], size[1]);
 	sim->initNodes();
+
+	simR->initDisplayNodes();
 
 	switch (computeUnit) {
 	case COMPUTE_UNIT::CPU: {
@@ -109,7 +112,7 @@ int bApp::initSim(int argc, char** argv)
 
 	case COMPUTE_UNIT::GPU: {
 		printf("Running on GPU!\n");
-		sim->initCudaOpenGLInterop();
+		simR->initCudaOpenGLInterop();
 		break;
 	}
 	}
@@ -151,10 +154,7 @@ void bApp::start()
 			ImGui::NewFrame();
 
 			update();
-
-			glBindVertexArray(sim->vao);
-			glDrawArrays(GL_POINTS, 0, sim->totalPoints);
-
+			simR->render();
 
 			if (ImGui::BeginMainMenuBar())
 			{
@@ -219,7 +219,7 @@ void bApp::update()
 		averageComputeTime = sdkGetAverageTimerValue(&timerCompute);
 
 		sdkStartTimer(&timerGraphics);
-		sim->CPUUpdateGraphics();
+		simR->CPUUpdateGraphics();
 		sdkStopTimer(&timerGraphics);
 
 		break;
@@ -232,7 +232,7 @@ void bApp::update()
 		averageComputeTime = sdkGetAverageTimerValue(&timerCompute);
 
 		sdkStartTimer(&timerGraphics);
-		sim->GPUUpdateGraphics();
+		simR->GPUUpdateGraphics();
 		sdkStopTimer(&timerGraphics);
 
 		break;
