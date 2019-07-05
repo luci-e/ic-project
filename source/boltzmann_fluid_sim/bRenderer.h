@@ -43,7 +43,6 @@ public:
 
 	std::map < renderMode, Shader > shaders;
 
-
 	struct cudaGraphicsResource* cudaVboNodes = NULL; // handles OpenGL-CUDA exchange
 	displayNode* cudaGLNodes = NULL;
 	size_t cudaGLNodesSize;
@@ -51,11 +50,12 @@ public:
 	GLuint nodesBuffer = 0;         // OpenGL array buffer object
 	GLuint nodesVao = 0;            // OpenGL vertex buffer object
 
-	float rectangleVertices[4 * (2 + 2)] = {
-		 0.5f,  0.5f,  1.0f, 1.0f, // top right
+	float rectangleVertices[4 * (2+2)] = {
+		// positions          // colors           // texture coords
+		 0.5f,  0.5f,   1.0f, 1.0f, // top right
 		 0.5f, -0.5f,  1.0f, 0.0f, // bottom right
 		-0.5f, -0.5f,  0.0f, 0.0f, // bottom left
-		-0.5f,  0.5f,  0.0f, 1.0f  // top left 
+		-0.5f,  0.5f,    0.0f, 1.0f  // top left 
 	};
 
 	unsigned int rectangleIndices[6] = {
@@ -74,7 +74,6 @@ public:
 		shaders[renderMode::TEXTURE] = Shader("textureShader.glsl", "textureFragment.glsl");
 
 		shaders[renderM].use();
-
 	};
 
 	void setRenderMode(renderMode mode);

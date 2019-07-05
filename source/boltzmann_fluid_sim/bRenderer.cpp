@@ -22,7 +22,6 @@ void bRenderer::setRenderMode(renderMode mode)
 
 int bRenderer::initDisplayNodes()
 {
-
 	// Initialize objects for point rendering 
 	glGenBuffers(1, &nodesBuffer);
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
@@ -68,15 +67,9 @@ int bRenderer::initDisplayNodes()
 	glEnableVertexAttribArray(2);
 
 	// ---------------------------------------------------------------------------------------------------- //
+
 	glGenVertexArrays(1, &textureVao);
 	glBindVertexArray(textureVao);
-
-	// Set the positions
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), NULL);
-	glEnableVertexAttribArray(0);
-	// Set the texcoord
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
 
 	// Initialize objects for texture rendering 
 	glGenBuffers(1, &textureVbo);
@@ -87,6 +80,13 @@ int bRenderer::initDisplayNodes()
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, textureEbo);
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(rectangleIndices), rectangleIndices, GL_DYNAMIC_DRAW);
 	
+	// position attribute
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(textureNode), (void*)0);
+	glEnableVertexAttribArray(0);
+	// texture coord attribute
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(textureNode), (void*)(2 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
 	glGenTextures(1, &textureNodes);
 	glBindTexture(GL_TEXTURE_2D, textureNodes);
 
@@ -95,7 +95,7 @@ int bRenderer::initDisplayNodes()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	float* sampleTex = (float*) malloc(4 * sim->dimX * sim->dimY * sizeof(float));
+	float* sampleTex = (float*) malloc(4 * sim->totalPoints * sizeof(float));
 	for (auto i = 0; i < sim->totalPoints*4; i+=4) {
 		*(sampleTex + i + 0) = 0.f;
 		*(sampleTex + i + 1) = 1.f;
@@ -183,6 +183,7 @@ int bRenderer::GPUUpdateGraphics()
 
 int bRenderer::initCudaOpenGLInterop()
 {
+	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
 	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsMapFlagsWriteDiscard);
 	auto err = cudaGetLastError();
