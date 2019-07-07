@@ -28,13 +28,17 @@ cudaComputeVelocity(bSimulator* sim) {
 
 	if (n.ntype == nodeType::BASE) {
 		float macroVel[2];
-
 		float density = sum(n.newDensities, 9);
 
-		matMul(n.newDensities, sim->speeds, macroVel, 1, 9, 2);
-		scalarProd(1.f / density, macroVel, macroVel, 2);
-		scalarProd((float)sim->c, macroVel, macroVel, 2);
-		n.vel = { macroVel[0], macroVel[1] };
+		if (density > 0.f) {
+			matMul(n.newDensities, sim->speeds, macroVel, 1, 9, 2);
+			scalarProd((float) sim->c / density, macroVel, macroVel, 2);
+			n.vel = { macroVel[0], macroVel[1] };
+		}
+		else {
+			n.vel = {0.f, 0.f};
+		}
+
 	}
 }
 
@@ -56,9 +60,9 @@ cudaComputeEquilibrium(bSimulator* sim) {
 
 		for (auto j = 0; j < 9; j++) {
 			float dotProd = dot(&sim->speeds[2 * j], macroVel, 2);
-			n.eqDensities[j] = density * sim->weights[j] * (1.f + 3.f * dotProd / sim->c
-				+ 9.f * (pow(dotProd, 2) / sim->csqr) / 2.f
-				- 3.f * dot(macroVel, macroVel, 2) / (2.f * sim->csqr));
+			n.eqDensities[j] = density * sim->weights[j] * (1.f + 3.f * dotProd
+				+ 9.f * (pow(dotProd, 2)) / 2.f
+				- 3.f * dot(macroVel, macroVel, 2) / 2.f);
 		}
 	}
 
@@ -130,8 +134,12 @@ cudaStream(bSimulator* sim) {
 				}
 
 				case bSimulator::edgeBehaviour::EXIT: {
-					n.newDensities[j] = 0;
+					n.newDensities[j] = 0.f;
 					continue;
+				}
+
+				case bSimulator::edgeBehaviour::WALL: {
+					goto wall;
 				}
 
 				}
@@ -147,7 +155,18 @@ cudaStream(bSimulator* sim) {
 			}
 
 			case nodeType::WALL: {
+				wall:
 				n.newDensities[opposite] += n.densities[j];
+				break;
+			}
+
+			case nodeType::SOURCE: {
+				n.newDensities[opposite] += nn->densities[opposite];
+				break;
+			}
+
+			case nodeType::SINK: {
+				n.newDensities[j] = 0;
 				break;
 			}
 			}
@@ -182,19 +201,39 @@ cudaUpdateGraphics(bRenderer* simR)
 
 	switch (n.ntype) {
 	case nodeType::BASE: {
-		dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 1.f, 0.f, 1.f);
+		float totalDensity = sum(&n.densities[0], 9);
+		dn.density = 1.f;
 
 		float newSpeeds[2] = { n.vel.x, n.vel.y };
 		double mag = magnitude(newSpeeds, 2);
 
-		dn.vel.x = mapNumber<float>(newSpeeds[0] / mag, -1.f, 1.f, 0.f, 1.f);
-		dn.vel.y = mapNumber<float>(newSpeeds[1] / mag, -1.f, 1.f, 0.f, 1.f);
+		if (mag > 0) {
+			dn.vel.x = mapNumber<float>(newSpeeds[0] / mag, -1.f, 1.f, 0.f, 1.f);
+			dn.vel.y = mapNumber<float>(newSpeeds[1] / mag, -1.f, 1.f, 0.f, 1.f);
+		}
+		else {
+			dn.vel.x = mapNumber<float>(0.f, -1.f, 1.f, 0.f, 1.f);
+			dn.vel.y = mapNumber<float>(0.f, -1.f, 1.f, 0.f, 1.f);
+		}
+
 		break;
 	}
 
 	case nodeType::WALL: {
+		dn.density = 0.f;
+		dn.vel = { 0.f, 0.f };
+		break;
+	}
+
+	case nodeType::SOURCE: {
 		dn.density = 1.f;
-		dn.vel = { 0,0 };
+		dn.vel = { 1.f, 0.f };
+		break;
+	}
+
+	case nodeType::SINK: {
+		dn.density = 1.f;
+		dn.vel = { 0.f, 1.f };
 		break;
 	}
 	}

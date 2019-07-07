@@ -29,8 +29,17 @@ void main() {
 	gl_PointSize = 1;
 	gl_Position = vec4(vp, 1.0, 1.0);
 
-	vec3 wheelColour;
-	colourWheel(vel, wheelColour);
+	if (density > 0){
+		vec3 wheelColour;
+		colourWheel(vel, wheelColour);
 
-	colour = vec4(wheelColour, density);
+		colour = vec4(wheelColour, density);
+		return;
+	}
+
+	colour = vec4(0.f, 0.f, 0.f, 1.f);
+
+
+
+
 };

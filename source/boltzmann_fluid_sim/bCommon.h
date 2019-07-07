@@ -19,9 +19,12 @@ public:
 	}
 };
 
-enum nodeType {
-	BASE,
-	WALL
+enum nodeType : int {
+	BASE = 0,
+	WALL = 1,
+	FAN = 2,
+	SOURCE = 3,
+	SINK = 4
 };
 
 struct node {

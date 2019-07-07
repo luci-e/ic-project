@@ -7,7 +7,9 @@
 
 #include <stdio.h>
 #include <string>
+#include <algorithm>    // std::find
 
+#include "utilities.h"
 #include "shaderHelper.h"
 #include "bSimulator.h"
 #include "bRenderer.h"
@@ -61,8 +63,6 @@ int bApp::initGL()
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
-	//ImGuiIO& io = ImGui::GetIO(); (void) io;
-
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
 
@@ -103,6 +103,7 @@ int bApp::initSim(int argc, char** argv)
 	sim->initNodes();
 
 	simR->initDisplayNodes();
+	simR->initCudaOpenGLInterop();
 
 	switch (computeUnit) {
 	case COMPUTE_UNIT::CPU: {
@@ -112,7 +113,6 @@ int bApp::initSim(int argc, char** argv)
 
 	case COMPUTE_UNIT::GPU: {
 		printf("Running on GPU!\n");
-		simR->initCudaOpenGLInterop();
 		break;
 	}
 	}
@@ -137,79 +137,223 @@ void bApp::cbReshape(GLFWwindow* window, int x, int y)
 
 void bApp::start()
 {
-	status = SIM_STATUS::RUNNING;
-	ImVec4 clear_color = ImVec4(0, 0, 0, 1.00f);
+	ImVec4 clear_color = ImVec4(0.f, 0.f, 0.f, 1.00f);
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+	updateSim();
+	updateGraphics();
 
 	while (!glfwWindowShouldClose(window)) {
-		switch (status) {
-		case SIM_STATUS::RUNNING: {
-			// wipe the drawing surface clear
-			glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
-
-			// Start the Dear ImGui frame
-			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();
-			ImGui::NewFrame();
-
-			update();
-			simR->render();
-
-			if (ImGui::BeginMainMenuBar())
-			{
-
-
-				if (ImGui::BeginMenu("File"))
-				{
-					if (ImGui::MenuItem("Quit", "Alt+F4")) {
-						glfwSetWindowShouldClose(window, GLFW_TRUE);
-					}
-					ImGui::EndMenu();
-				}
-
-
-				if (ImGui::BeginMenu("View"))
-				{
-					ImGui::Checkbox("Stats Window", &showStatsWindow);
-					ImGui::Checkbox("Tools Window", &showToolsWindow);
-					ImGui::EndMenu();
-				}
-
-				ImGui::EndMainMenuBar();
-			}
-
-			if (showStatsWindow) {
-				if (ImGui::Begin("Stats", &showStatsWindow)) {
-					ImGui::Text("Application average compute time %.3f ms/frame (%.1f SPS)", averageComputeTime, 1000.f / averageComputeTime );
-					ImGui::Text("Application average render time %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
-					ImGui::End();
-				}
-			}
-
-			// Rendering
-			ImGui::Render();
-			int display_w, display_h;
-			glfwGetFramebufferSize(window, &display_w, &display_h);
-			glViewport(0, 0, display_w, display_h);
-
-			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-			// put the stuff we've been drawing onto the display
-			glfwSwapBuffers(window);
-			break;
-		}
-
-		case SIM_STATUS::PAUSED: {
-			break;
-		}
-		}
-
 		// update other events like input handling 
 		glfwPollEvents();
+
+		// wipe the drawing surface clear
+		glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glEnable(GL_VERTEX_PROGRAM_POINT_SIZE);
+
+		// Start the Dear ImGui frame
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
+
+		if (status == SIM_STATUS::RUNNING) {
+			updateSim();
+			updateGraphics();
+		}
+		simR->render();
+
+		if (ImGui::BeginMainMenuBar())
+		{
+			if (ImGui::BeginMenu("File"))
+			{
+				if (ImGui::MenuItem("New Simulator")) {
+					showInitializerWindow = true;
+				}
+
+				if (ImGui::MenuItem("Quit", "Alt+F4")) {
+					glfwSetWindowShouldClose(window, GLFW_TRUE);
+				}
+
+				ImGui::EndMenu();
+			}
+
+
+			if (ImGui::BeginMenu("View"))
+			{
+				ImGui::Checkbox("Stats Window", &showStatsWindow);
+				ImGui::Checkbox("Tools Window", &showControlWindow);
+				ImGui::EndMenu();
+			}
+
+			ImGui::EndMainMenuBar();
+		}
+
+		// Stats window displays FPS and SPS
+		if (showStatsWindow) {
+			ImGui::Begin("Stats", &showStatsWindow);
+			if (status == SIM_STATUS::PAUSED) {
+				ImGui::Text("Current compute unit:");
+				ImGui::SameLine();
+				if (ImGui::Button(computeString[computeUnit])) {
+					timerCompute->reset();
+					cudaDeviceSynchronize();
+
+					switch (computeUnit) {
+					case COMPUTE_UNIT::CPU:
+						computeUnit = COMPUTE_UNIT::GPU;
+						break;
+
+					case COMPUTE_UNIT::GPU:
+						computeUnit = COMPUTE_UNIT::CPU;
+						break;
+					}
+
+				}
+			}
+			else {
+				ImGui::Text("Current compute unit: %s", computeString[computeUnit]);
+			}
+
+			ImGui::Text("Application average compute time %.3f ms/frame (%.1f SPS)", averageComputeTime, 1000.f / averageComputeTime);
+			ImGui::Text("Application average render time %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+			ImGui::End();
+		}
+
+
+		// Control window for the simulator
+		if (showControlWindow) {
+			ImGui::Begin("Simulator", &showControlWindow);
+
+			ImGui::Text("Simulator Status:");
+			ImGui::SameLine();
+			if (ImGui::Button(statusString[status].c_str())) {
+				if (status == SIM_STATUS::PAUSED) {
+					status = SIM_STATUS::RUNNING;
+				}
+				else if (status == SIM_STATUS::RUNNING) {
+					status = SIM_STATUS::PAUSED;
+				}
+			}
+
+			if (status == SIM_STATUS::PAUSED) {
+				ImGui::SameLine();
+				ImGui::PushButtonRepeat(true);
+				if (ImGui::Button("Step") ){
+					updateSim();
+					updateGraphics();
+				}
+				ImGui::PopButtonRepeat();
+			}
+
+			if (status == SIM_STATUS::PAUSED) {
+				ImGui::SameLine();
+				if (ImGui::Button("Reset")) {
+					sim->reset();
+					updateSim();
+					updateGraphics();
+				}
+			}
+			if (ImGui::TreeNode("Simulation parameters"))
+			{
+				ImGui::SliderFloat("Viscosity", &sim->viscosity, 0.0f, 2.0f, "%.4f");
+				ImGui::SliderFloat("C", &sim->c, 0.0f, 1.0f, "%.4f");
+
+				ImGui::TreePop();
+			}
+
+			if (ImGui::TreeNode("Edge Behaviour"))
+			{
+				ImGui::RadioButton("Loop", &edgeBehaviour, 0);
+				ImGui::RadioButton("Exit", &edgeBehaviour, 1);
+				ImGui::RadioButton("Wall", &edgeBehaviour, 2);
+				ImGui::TreePop();
+			}
+
+			if (ImGui::TreeNode("Render Mode"))
+			{
+				ImGui::RadioButton("Mesh", &renderMode, 0);
+				ImGui::RadioButton("Points", &renderMode, 1);
+				ImGui::TreePop();
+
+			}
+
+			if (ImGui::IsMousePosValid()) {
+				if (!io.WantCaptureMouse) {
+					if (selectedTool >= 0) {
+						tools[selectedTool]->handleInput(&io);
+						updateGraphics();
+					}
+				}
+			}
+
+			if (ImGui::TreeNode("Tools")) {
+				if (ImGui::Selectable("Move Tool", selectedTool == 0)) {
+					selectedTool = 0;
+				}
+
+				if (ImGui::Selectable("Fan Tool", selectedTool == 1)) {
+					selectedTool = 1;
+				}
+
+				if (ImGui::Selectable("Source Sink Tool", selectedTool == 2)) {
+					selectedTool = 2;
+				}
+
+				if (ImGui::Selectable("Wall Tool", selectedTool == 3)) {
+					selectedTool = 3;
+				}
+
+				if (selectedTool >= 0) {
+					tools[selectedTool]->updateGraphics();
+				}
+				ImGui::TreePop();
+			}
+
+			ImGui::End();
+		}
+
+		updateRenderMode();
+		updateEdgeBehaviour();
+
+
+		if (showInitializerWindow) {
+			static int newSize[2] = { 256, 256 };
+
+			ImGui::Begin("New Simulation", &showInitializerWindow);
+			ImGui::InputInt2("Size", newSize);
+
+			if (ImGui::Button("Simulate!")) {
+				cudaDeviceSynchronize();
+				simR->cleanup();
+				sim->cleanup();
+				cudaFree(sim);
+				cudaDeviceSynchronize();
+
+				bSimulator* newSim = new bSimulator();
+				newSim->initSim(newSize[0], newSize[1]);
+				newSim->initNodes();
+				simR->sim = newSim;
+				simR->initDisplayNodes();
+				simR->initCudaOpenGLInterop();
+			}
+
+			ImGui::End();
+		}
+
+		// Rendering
+		ImGui::Render();
+		int display_w, display_h;
+		glfwGetFramebufferSize(window, &display_w, &display_h);
+		glViewport(0, 0, display_w, display_h);
+
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		// put the stuff we've been drawing onto the display
+		glfwSwapBuffers(window);
 	}
 }
 
-void bApp::update()
+void bApp::updateSim()
 {
 	switch (computeUnit) {
 	case COMPUTE_UNIT::CPU: {
@@ -217,11 +361,6 @@ void bApp::update()
 		sim->CPUUpdate();
 		sdkStopTimer(&timerCompute);
 		averageComputeTime = sdkGetAverageTimerValue(&timerCompute);
-
-		sdkStartTimer(&timerGraphics);
-		simR->CPUUpdateGraphics();
-		sdkStopTimer(&timerGraphics);
-
 		break;
 	}
 
@@ -231,12 +370,46 @@ void bApp::update()
 		sdkStopTimer(&timerCompute);
 		averageComputeTime = sdkGetAverageTimerValue(&timerCompute);
 
+		break;
+	}
+	}
+}
+
+void bApp::updateGraphics()
+{
+	switch (computeUnit) {
+	case COMPUTE_UNIT::CPU: {
+		sdkStartTimer(&timerGraphics);
+		simR->CPUUpdateGraphics();
+		sdkStopTimer(&timerGraphics);
+
+		break;
+	}
+
+	case COMPUTE_UNIT::GPU: {
 		sdkStartTimer(&timerGraphics);
 		simR->GPUUpdateGraphics();
 		sdkStopTimer(&timerGraphics);
 
 		break;
 	}
+	}
+}
+
+void bApp::updateRenderMode()
+{
+	bRenderer::renderMode rm = bRenderer::renderMode(renderMode);
+
+	if (rm != simR->renderM) {
+		simR->setRenderMode(rm);
+	}
+}
+
+void bApp::updateEdgeBehaviour()
+{
+	bSimulator::edgeBehaviour eb = bSimulator::edgeBehaviour(edgeBehaviour);
+	if (eb != sim->doAtEdge) {
+		sim->setEdgeBehaviour(eb);
 	}
 }
 

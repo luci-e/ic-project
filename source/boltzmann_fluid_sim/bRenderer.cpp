@@ -17,7 +17,6 @@ void bRenderer::setRenderMode(renderMode mode)
 {
 	renderM = mode;
 	cudaDeviceSynchronize();
-	shaders[renderM].use();
 }
 
 int bRenderer::initDisplayNodes()
@@ -56,6 +55,11 @@ int bRenderer::initDisplayNodes()
 	glBindVertexArray(nodesVao);
 	glBindBuffer(GL_ARRAY_BUFFER, nodesBuffer);
 
+	glGenBuffers(1, &nodesEbo);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nodesEbo);
+	generateTriangleIndices();
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, 3 * totalTriangles * sizeof(unsigned int), triangleIndices, GL_DYNAMIC_DRAW);
+
 	// Set the positions
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(displayNode), NULL);
 	glEnableVertexAttribArray(0);
@@ -66,48 +70,38 @@ int bRenderer::initDisplayNodes()
 	glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, sizeof(displayNode), (void*)(2 * sizeof(float) + 2 * sizeof(float)));
 	glEnableVertexAttribArray(2);
 
-	// ---------------------------------------------------------------------------------------------------- //
+}
 
-	glGenVertexArrays(1, &textureVao);
-	glBindVertexArray(textureVao);
+void bRenderer::generateTriangleIndices()
+{
+	unsigned long long trianglesPerStrip = ((sim->dimX - 1) * 2);
 
-	// Initialize objects for texture rendering 
-	glGenBuffers(1, &textureVbo);
-	glBindBuffer(GL_ARRAY_BUFFER, textureVbo);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(rectangleVertices), rectangleVertices, GL_DYNAMIC_DRAW);
+	totalTriangles = ((sim->dimX - 1) * 2) * (sim->dimY - 1);
 
-	glGenBuffers(1, &textureEbo);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, textureEbo);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(rectangleIndices), rectangleIndices, GL_DYNAMIC_DRAW);
-	
-	// position attribute
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(textureNode), (void*)0);
-	glEnableVertexAttribArray(0);
-	// texture coord attribute
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(textureNode), (void*)(2 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+	triangleIndices = (unsigned int*)malloc(3 * totalTriangles * sizeof(unsigned int));
 
-	glGenTextures(1, &textureNodes);
-	glBindTexture(GL_TEXTURE_2D, textureNodes);
+	for (auto i = 0; i < totalTriangles; i++) {
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		unsigned int indices[3];
+		unsigned int strip = i / trianglesPerStrip;
+		unsigned long long normalizedIndex = i - (strip * trianglesPerStrip);
 
-	float* sampleTex = (float*) malloc(4 * sim->totalPoints * sizeof(float));
-	for (auto i = 0; i < sim->totalPoints*4; i+=4) {
-		*(sampleTex + i + 0) = 0.f;
-		*(sampleTex + i + 1) = 1.f;
-		*(sampleTex + i + 2) = 0.f;
-		*(sampleTex + i + 3) = 1.f;
+		if (normalizedIndex < trianglesPerStrip / 2) {
+			indices[0] = normalizedIndex + strip * sim->dimX;
+			indices[1] = normalizedIndex + 1 + strip * sim->dimX;
+			indices[2] = normalizedIndex + (1 + strip) * sim->dimX;
+
+			memcpy(triangleIndices + (i * 3), indices, 3 * sizeof(unsigned int));
+		}
+		else {
+
+			indices[0] = normalizedIndex + (strip * sim->dimX) - (trianglesPerStrip / 2) + 1;
+			indices[1] = normalizedIndex + (strip * sim->dimX) + 1;
+			indices[2] = normalizedIndex + (strip * sim->dimX) + 2;
+
+			memcpy(triangleIndices + (i * 3), indices, 3 * sizeof(unsigned int));
+		}
 	}
-	   
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, sim->dimX, sim->dimY, 0, GL_RGBA, GL_FLOAT, sampleTex);
-	glGenerateMipmap(GL_TEXTURE_2D);
-
-	free(sampleTex);
-	return 0;
 }
 
 int bRenderer::updateDisplayNodes()
@@ -133,8 +127,8 @@ int bRenderer::updateDisplayNodes()
 
 void bRenderer::initDisplayNode(const node& n, displayNode& dn)
 {
-	dn.pos.x = mapNumber<float>(n.x, 0, sim->dimX, -1.f, 1.f);
-	dn.pos.y = mapNumber<float>(n.y, 0, sim->dimY, -1.f, 1.f);
+	dn.pos.x = mapNumber<float>(n.x, 0, sim->dimX-1, -1.f, 1.f);
+	dn.pos.y = mapNumber<float>(n.y, 0, sim->dimY-1, 1.f, -1.f);
 
 	updateDisplayNode(n, dn);
 }
@@ -143,7 +137,8 @@ void bRenderer::updateDisplayNode(const node& n, displayNode& dn)
 {
 	switch (n.ntype) {
 	case nodeType::BASE: {
-		dn.density = mapNumber<float>(sum(&n.densities[0], 9), 0.f, 1.f, 0.f, 1.f);
+		float totalDensity = sum(&n.densities[0], 9);
+		dn.density = totalDensity / 3.f;
 
 		float newSpeeds[2] = { n.vel.x, n.vel.y };
 		double mag = magnitude(newSpeeds, 2);
@@ -154,7 +149,7 @@ void bRenderer::updateDisplayNode(const node& n, displayNode& dn)
 	}
 
 	case nodeType::WALL: {
-		dn.density = 1.f;
+		dn.density = 0.f;
 		dn.vel = { 0,0 };
 		break;
 	}
@@ -188,7 +183,7 @@ int bRenderer::initCudaOpenGLInterop()
 	cudaGraphicsGLRegisterBuffer(&cudaVboNodes, nodesBuffer, cudaGraphicsMapFlagsWriteDiscard);
 	auto err = cudaGetLastError();
 
-	if( err != cudaSuccess){
+	if (err != cudaSuccess) {
 		printf("Error while initializing cuda GL interop\n");
 		return -1;
 	}
@@ -199,11 +194,10 @@ int bRenderer::initCudaOpenGLInterop()
 void bRenderer::render()
 {
 	switch (renderM) {
-	case renderMode::TEXTURE: {
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textureNodes);
-		glBindVertexArray(textureVao);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+	case renderMode::MESH: {
+		glBindVertexArray(nodesVao);
+		//glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		glDrawElements(GL_TRIANGLES, totalTriangles * 3, GL_UNSIGNED_INT, 0);
 		break;
 	}
 
@@ -218,7 +212,11 @@ void bRenderer::render()
 
 void bRenderer::cleanup()
 {
+	cudaDeviceSynchronize();
 	cudaGraphicsUnregisterResource(cudaVboNodes);
 	glDeleteVertexArrays(1, &nodesVao);
 	glDeleteBuffers(1, &nodesBuffer);
+	free(triangleIndices);
+	cudaDeviceSynchronize();
 }
+

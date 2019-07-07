@@ -6,6 +6,32 @@
 #include "bKernels.cuh"
 #include <cassert>
 
+void bSimulator::reset()
+{
+	std::default_random_engine generator;
+	std::uniform_int_distribution<int> pos_distribution(1, 8);
+	auto pos_dice = std::bind(pos_distribution, generator);
+
+	// Initialize the nodes array
+	for (auto y = 0; y < dimY; y++) {
+		for (auto x = 0; x < dimX; x++) {
+			node& n = *(nodes + (y * dimX + x));
+			n.ntype = nodeType::BASE;
+			n.x = x;
+			n.y = y;
+			memset(n.densities, 0.f, 9 * sizeof(float));
+			memset(n.newDensities, 0.f, 9 * sizeof(float));
+			memset(n.eqDensities, 0.f, 9 * sizeof(float));
+
+			n.densities[0] = 1.f;
+
+		}
+	}
+
+	CPUComputeVelocity();
+	CPUcomputeEquilibrium();
+}
+
 void bSimulator::CPUUpdate()
 {
 	CPUstream();
@@ -179,12 +205,14 @@ void bSimulator::GPUstream()
 	cudaDeviceSynchronize();
 }
 
+void bSimulator::setEdgeBehaviour(edgeBehaviour behaviour)
+{
+	cudaDeviceSynchronize();
+	doAtEdge = behaviour;
+}
+
 int bSimulator::initNodes()
 {
-	std::default_random_engine generator;
-	std::uniform_int_distribution<int> pos_distribution(1, 8);
-	auto pos_dice = std::bind(pos_distribution, generator);
-
 	cudaMallocManaged(&nodes, sizeof(node) * totalPoints);
 	cudaDeviceSynchronize();
 
@@ -192,20 +220,7 @@ int bSimulator::initNodes()
 		return -1;
 	}
 
-	// Initialize the nodes array
-	for (auto y = 0; y < dimY; y++) {
-		for (auto x = 0; x < dimX; x++) {
-			node& n = *(nodes + (y * dimX + x));
-			n.ntype = nodeType::BASE;
-			n.x = x;
-			n.y = y;
-			memset(n.densities, 0.f, 9 * sizeof(float));
-			memset(n.newDensities, 0.f, 9 * sizeof(float));
-			memset(n.eqDensities, 0.f, 9 * sizeof(float));
-			n.densities[0] = 11;
-			n.densities[pos_dice()] = 5;
-		}
-	}
+	reset();
 
 	return 0;
 }
@@ -219,4 +234,5 @@ void bSimulator::cleanup()
 {
 	cudaDeviceSynchronize();
 	cudaFree(nodes);
+	cudaDeviceSynchronize();
 }
