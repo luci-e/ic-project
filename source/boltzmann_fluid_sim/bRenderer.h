@@ -24,24 +24,18 @@ public:
 
 	bSimulator* sim;
 
-
 	struct displayNode {
 		float2 pos;
 		float2 vel;
 		float density;
 	};
 
-	struct textureNode {
-		float2 pos;
-		float2 texCoord;
-	};
+	enum renderMode : int {
+		MESH = 0,
+		POINTS = 1
+	} renderM = renderMode::MESH;
 
-	enum renderMode {
-		TEXTURE,
-		POINTS
-	} renderM = renderMode::TEXTURE;
-
-	std::map < renderMode, Shader > shaders;
+	Shader shader;
 
 	struct cudaGraphicsResource* cudaVboNodes = NULL; // handles OpenGL-CUDA exchange
 	displayNode* cudaGLNodes = NULL;
@@ -49,36 +43,20 @@ public:
 
 	GLuint nodesBuffer = 0;         // OpenGL array buffer object
 	GLuint nodesVao = 0;            // OpenGL vertex buffer object
+	GLuint nodesEbo = 0;			// OpenGL element buffer object
 
-	float rectangleVertices[4 * (2+2)] = {
-		// positions          // colors           // texture coords
-		 0.5f,  0.5f,   1.0f, 1.0f, // top right
-		 0.5f, -0.5f,  1.0f, 0.0f, // bottom right
-		-0.5f, -0.5f,  0.0f, 0.0f, // bottom left
-		-0.5f,  0.5f,    0.0f, 1.0f  // top left 
-	};
-
-	unsigned int rectangleIndices[6] = {
-		0, 1, 3, // first triangle
-		1, 2, 3  // second triangle
-	};
-
-	GLuint textureNodes = 0;		// OpenGL texture object
-
-	GLuint textureEbo = 0;			// OpenGL element buffer object
-	GLuint textureVbo = 0;			// OpenGL texture object
-	GLuint textureVao = 0;			// OpenGL vertex buffer object
+	unsigned long long totalTriangles = 0;
+	unsigned int *triangleIndices;
 
 	bRenderer(bSimulator* sim) : sim(sim) {
-		shaders[renderMode::POINTS] = Shader("pointsShader.glsl", "pointsFragment.glsl");
-		shaders[renderMode::TEXTURE] = Shader("textureShader.glsl", "textureFragment.glsl");
-
-		shaders[renderM].use();
+		shader = Shader("pointsShader.glsl", "pointsFragment.glsl");
+		shader.use();
 	};
 
 	void setRenderMode(renderMode mode);
 
 	int initDisplayNodes();
+	void generateTriangleIndices();
 	int updateDisplayNodes();
 	void initDisplayNode(const node& n, displayNode& dn);
 	void updateDisplayNode(const node& n, displayNode& dn);

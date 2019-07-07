@@ -16,9 +16,10 @@
 class bSimulator : public Managed
 {
 public:
-	enum edgeBehaviour {
-		LOOP,
-		EXIT
+	enum edgeBehaviour : int{
+		LOOP = 0,
+		EXIT = 1,
+		WALL = 2
 	} doAtEdge = edgeBehaviour::LOOP;
 
 	float weights[9] = { 4.f / 9.f,
@@ -61,9 +62,9 @@ public:
 	double temperature = 1;
 	double mass = 2.992e-23;
 	const double boltzmann_k = 1.38064852e-23;
-	double c = 0;
-	double csqr = 0;
-	double viscosity = 1.0;
+	float c = 0;
+	float csqr = 0;
+	float viscosity = .001;
 
 	unsigned long long int totalPoints = 0;
 
@@ -73,9 +74,13 @@ public:
 	bSimulator() {};
 
 	void initSim(unsigned long long int dimX = 256, unsigned long long int dimY = 256) {
+		(dimX < 2) ? dimX = 2 : dimX;
+		(dimY < 2) ? dimY = 2 : dimY;
+
+		
 		totalPoints = dimX * dimY;
 		csqr = 3.f * boltzmann_k * temperature / mass;
-		csqr = 1;
+		csqr = 0.01;
 		printf("Csqr is :%lf\n", csqr);
 		c = sqrt(csqr);
 
@@ -90,6 +95,8 @@ public:
 		printf("Grid dim: %u %u \nBlock dim: %u %u\n", gridDim.x, gridDim.y, blockDim.x, blockDim.y);
 	};
 
+	void reset();
+
 	void CPUUpdate();
 	void CPUComputeVelocity();
 	void CPUcomputeEquilibrium();
@@ -101,6 +108,8 @@ public:
 	void GPUcomputeEquilibrium();
 	void GPUcomputeNew();
 	void GPUstream();
+
+	void setEdgeBehaviour(edgeBehaviour behaviour);
 
 	int initNodes();
 	bool inside(long long int x, long long int y);

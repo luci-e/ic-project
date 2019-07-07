@@ -48,6 +48,16 @@ CUDA_CALLABLE inline double magnitude(const type* inVec, const unsigned long int
 }
 
 template <class type>
+CUDA_CALLABLE inline void normalize(const type* inVec, type* outVec, const unsigned long int size) {
+	double mag = magnitude(inVec, size);
+
+	for (unsigned long int i = 0; i < size; i++) {
+		*(outVec + i) = *(inVec + i) / mag;
+	}
+
+}
+
+template <class type>
 CUDA_CALLABLE inline double average(const type* inVec, const unsigned long int size) {
 	type sum = 0;
 	for (unsigned long int i = 0; i < size; i++) {
