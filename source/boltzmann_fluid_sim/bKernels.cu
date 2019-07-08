@@ -9,6 +9,9 @@
 #include "bSimulator.h"
 #include "bRenderer.h"
 
+#define OPPOSITE(j)  ((j) < 5) ? (((j) - 1) + 2) % 4 + 1 : (((j) - 5) + 2) % 4 + 5
+
+
 __device__ inline bool inside(long long int x, long long int y, unsigned long long int maxX, unsigned long long int maxY){
 	return (x >= 0 && x < maxX && y >= 0 && y < maxY);
 }
@@ -115,7 +118,7 @@ cudaStream(bSimulator* sim) {
 				continue;
 			}
 
-			int opposite = (j < 5) ? ((j - 1) + 2) % 4 + 1 : ((j - 5) + 2) % 4 + 5;
+			int opposite = OPPOSITE(j);
 
 			long long int newX = n.x + dx;
 			long long int newY = n.y + dy;
@@ -161,7 +164,7 @@ cudaStream(bSimulator* sim) {
 			}
 
 			case nodeType::SOURCE: {
-				n.newDensities[opposite] += nn->densities[opposite];
+				n.newDensities[opposite] += (nn->densities[opposite] + n.densities[j]);
 				break;
 			}
 
@@ -234,6 +237,12 @@ cudaUpdateGraphics(bRenderer* simR)
 	case nodeType::SINK: {
 		dn.density = 1.f;
 		dn.vel = { 0.f, 1.f };
+		break;
+	}
+
+	case nodeType::FAN: {
+		dn.density = 1.f;
+		dn.vel = { .7f, .7f };
 		break;
 	}
 	}

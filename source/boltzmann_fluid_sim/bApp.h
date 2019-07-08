@@ -101,15 +101,83 @@ public:
 	public:
 		using tool::tool;
 
-		void handleMovement() {};
-		void handleClick() {};
+		void drawFan(float startX, float startY) {
+			for (auto y = 0; y < brushSize; y++) {
+				for (auto x = 0; x < brushSize; x++) {
+					bool isActive = *(brush + y * brushSize + x);
 
-		void updateGraphics() {
-			tool::updateGraphics();
+					if (isActive) {
 
+						int dX = x - brushSize / 2;
+						int dY = y - brushSize / 2;
+
+						int newX = startX + dX;
+						int newY = startY + dY;
+
+						if (app->sim->inside(newX, newY)) {
+							node& n = *(app->sim->nodes + app->sim->dimX * newY + newX);
+							n.ntype = nodeType::FAN;
+							memset(n.densities, 1.f, 9 * sizeof(float));
+						}
+
+					}
+
+				}
+			}
 		};
 
-		void handleInput(ImGuiIO* io) {};
+		void handleMovement() {
+			scaleCoordinates();
+			cudaDeviceSynchronize();
+
+			float direction[2] = { deltaX, deltaY };
+			float mag = magnitude(direction, 2);
+			normalize(direction, direction, 2);
+
+			for (float step = 0; step < mag; step++) {
+				float dX = step * direction[0];
+				float dY = step * direction[1];
+
+
+				int newX = startX + dX;
+				int newY = startY + dY;
+
+				if (app->sim->inside(newX, newY)) {
+					drawFan(newX, newY);
+				}
+			}
+		};
+
+		void handleClick() {
+			scaleCoordinates();
+			cudaDeviceSynchronize();
+			drawFan(startX, startY);
+		};
+
+		void handleInput(ImGuiIO* io) {
+			if (ImGui::IsMouseClicked(0)) {
+				startX = io->MousePos.x;
+				startY = io->MousePos.y;
+				handleClick();
+			}
+			else if (ImGui::IsMouseClicked(1)) {
+				startX = io->MousePos.x;
+				startY = io->MousePos.y;
+			}
+
+			if (ImGui::IsMouseDown(0)) {
+
+				deltaX = io->MouseDelta.x;
+				deltaY = io->MouseDelta.y;
+
+				startX = io->MousePos.x;
+				startY = io->MousePos.y;
+				handleMovement();
+			}
+			else if (ImGui::IsMouseDown(1)) {
+
+			}
+		};
 
 	};
 
@@ -135,7 +203,9 @@ public:
 							node& n = *(app->sim->nodes + app->sim->dimX * newY + newX);
 							if (sourceOrSink) {
 								n.ntype = nodeType::SOURCE;
-								memset(n.densities, 1.f, 9 * sizeof(float));
+								for (int i = 0; i < 9; i++) {
+									n.densities[i] = 1.f;
+								}
 							}
 							else {
 								n.ntype = nodeType::SINK;
